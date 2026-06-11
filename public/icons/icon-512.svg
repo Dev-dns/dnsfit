@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="dnsfit icon">
+  <rect width="512" height="512" rx="112" fill="#050505"/>
+  <path d="M102 300h308" stroke="#262626" stroke-width="48" stroke-linecap="round"/>
+  <path d="M144 300h224" stroke="#E50914" stroke-width="48" stroke-linecap="round"/>
+  <path d="M186 196h140c42 0 74 32 74 74v48c0 42-32 74-74 74H186c-42 0-74-32-74-74v-48c0-42 32-74 74-74Z" fill="none" stroke="#FFFFFF" stroke-width="28"/>
+  <path d="M192 274h128M192 334h86" stroke="#A1A1A1" stroke-width="22" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,255 @@
+import { useEffect, useState } from "react";
+import { Badge } from "../../components/ui/Badge";
+import { Button } from "../../components/ui/Button";
+import { Card } from "../../components/ui/Card";
+import { EmptyState } from "../../components/ui/EmptyState";
+import { Input } from "../../components/ui/Input";
+import { Select } from "../../components/ui/Select";
+import { exerciseRepository } from "../../db/repositories/exerciseRepository";
+import { routineRepository } from "../../db/repositories/routineRepository";
+import { workoutRepository } from "../../db/repositories/workoutRepository";
+import type { Exercise } from "../../domain/exercises/exerciseTypes";
+import type { Routine, RoutineDay, RoutineExercise } from "../../domain/routines/routineTypes";
+import { createId, nowIso } from "../../domain/shared/entity";
+
+type RoutineDetail = {
+  day: RoutineDay;
+  exercises: RoutineExercise[];
+};
+
+export function RoutinesPage() {
+  const [routines, setRoutines] = useState<Routine[]>([]);
+  const [exercises, setExercises] = useState<Exercise[]>([]);
+  const [selectedRoutineId, setSelectedRoutineId] = useState<string | null>(null);
+  const [routineDetails, setRoutineDetails] = useState<RoutineDetail[]>([]);
+  const [routineName, setRoutineName] = useState("");
+  const [dayName, setDayName] = useState("");
+  const [selectedDayId, setSelectedDayId] = useState<string>("");
+  const [selectedExerciseId, setSelectedExerciseId] = useState<string>("");
+  const [targetSets, setTargetSets] = useState("3");
+  const [restSeconds, setRestSeconds] = useState("180");
+  const [backOffReductionPercent, setBackOffReductionPercent] = useState("10");
+  const [topSetRestSeconds, setTopSetRestSeconds] = useState("240");
+  const [backOffRestSeconds, setBackOffRestSeconds] = useState("180");
+  const [structureType, setStructureType] = useState<"normal" | "top_set_back_off">("normal");
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+
+  const refresh = async (nextRoutineId = selectedRoutineId) => {
+    const [routineData, exerciseData] = await Promise.all([routineRepository.list(), exerciseRepository.listActive()]);
+    setRoutines(routineData);
+    setExercises(exerciseData);
+
+    const routineId = nextRoutineId ?? routineData[0]?.id ?? null;
+    setSelectedRoutineId(routineId);
+    if (routineId) {
+      const detail = await routineRepository.getRoutineDetail(routineId);
+      setRoutineDetails(detail.days);
+      if (!selectedDayId && detail.days[0]) setSelectedDayId(detail.days[0].day.id);
+    } else {
+      setRoutineDetails([]);
+    }
+    if (!selectedExerciseId && exerciseData[0]) setSelectedExerciseId(exerciseData[0].id);
+  };
+
+  useEffect(() => {
+    refresh();
+  }, []);
+
+  const selectedRoutine = routines.find((routine) => routine.id === selectedRoutineId);
+  const selectedDay = routineDetails.find((detail) => detail.day.id === selectedDayId)?.day;
+
+  const createRoutine = async () => {
+    if (!routineName.trim()) return;
+    const now = nowIso();
+    const routine: Routine = {
+      id: createId(),
+      name: routineName.trim(),
+      goal: "hypertrophy",
+      isActive: true,
+      createdAt: now,
+      updatedAt: now
+    };
+    await routineRepository.putRoutine(routine);
+    setRoutineName("");
+    await refresh(routine.id);
+  };
+
+  const createDay = async () => {
+    if (!selectedRoutineId || !dayName.trim()) return;
+    const now = nowIso();
+    const day: RoutineDay = {
+      id: createId(),
+      routineId: selectedRoutineId,
+      name: dayName.trim(),
+      order: routineDetails.length + 1,
+      createdAt: now,
+      updatedAt: now
+    };
+    await routineRepository.putDay(day);
+    setDayName("");
+    setSelectedDayId(day.id);
+    await refresh(selectedRoutineId);
+  };
+
+  const addRoutineExercise = async () => {
+    if (!selectedDayId || !selectedExerciseId) return;
+    const detail = routineDetails.find((item) => item.day.id === selectedDayId);
+    const now = nowIso();
+    await routineRepository.putExercise({
+      id: createId(),
+      routineDayId: selectedDayId,
+      exerciseId: selectedExerciseId,
+      order: (detail?.exercises.length ?? 0) + 1,
+      structureType,
+      targetSets: Math.max(1, Number(targetSets) || 1),
+      topSets: structureType === "top_set_back_off" ? 1 : undefined,
+      backOffSets: structureType === "top_set_back_off" ? Math.max(1, (Number(targetSets) || 3) - 1) : undefined,
+      backOffReductionPercent: structureType === "top_set_back_off" ? Math.max(0, Number(backOffReductionPercent) || 10) : undefined,
+      restSeconds: Math.max(1, Number(restSeconds) || 180),
+      topSetRestSeconds: structureType === "top_set_back_off" ? Math.max(1, Number(topSetRestSeconds) || 240) : undefined,
+      backOffRestSeconds: structureType === "top_set_back_off" ? Math.max(1, Number(backOffRestSeconds) || 180) : undefined,
+      createdAt: now,
+      updatedAt: now
+    });
+    await refresh(selectedRoutineId);
+  };
+
+  const startWorkout = async (routineDayId: string) => {
+    try {
+      await workoutRepository.startFromRoutineDay(routineDayId);
+      window.location.hash = "training";
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "No se pudo iniciar el entreno.");
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <Badge tone="danger">Rutinas</Badge>
+        <h2 className="mt-4 text-3xl font-black tracking-[-0.05em]">Planifica y arranca.</h2>
+        <p className="mt-3 text-sm leading-6 text-muted">Crea rutinas, divide por dias y genera entrenos locales desde cada sesion.</p>
+        {statusMessage ? <p className="mt-4 rounded-2xl border border-danger/40 bg-danger/10 p-3 text-sm text-white">{statusMessage}</p> : null}
+      </Card>
+
+      <Card>
+        <div className="space-y-3">
+          <Input label="Nueva rutina" value={routineName} onChange={(event) => setRoutineName(event.target.value)} placeholder="Push Pull Legs" />
+          <Button className="w-full" onClick={createRoutine}>Crear rutina</Button>
+        </div>
+      </Card>
+
+      {routines.length === 0 ? <EmptyState title="Sin rutinas" description="Crea una rutina y despues anade dias y ejercicios." /> : null}
+
+      {routines.length > 0 ? (
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {routines.map((routine) => (
+            <button
+              key={routine.id}
+              type="button"
+              className={`shrink-0 rounded-2xl border px-4 py-3 text-sm font-bold ${routine.id === selectedRoutineId ? "border-danger bg-danger text-white" : "border-line bg-panel text-muted"}`}
+              onClick={() => refresh(routine.id)}
+            >
+              {routine.name}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {selectedRoutine ? (
+        <div className="space-y-4">
+          <Card>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-2xl font-black tracking-[-0.05em]">{selectedRoutine.name}</h3>
+                <p className="mt-1 text-sm text-muted">Objetivo: {selectedRoutine.goal}</p>
+              </div>
+              <Button variant="ghost" className="min-h-0 px-3 py-2 text-xs" onClick={async () => { await routineRepository.archiveRoutine(selectedRoutine.id); await refresh(null); }}>Archivar</Button>
+            </div>
+          </Card>
+
+          <Card>
+            <div className="space-y-3">
+              <Input label="Nuevo dia" value={dayName} onChange={(event) => setDayName(event.target.value)} placeholder="Push A" />
+              <Button variant="secondary" className="w-full" onClick={createDay}>Anadir dia</Button>
+            </div>
+          </Card>
+
+          {routineDetails.length > 0 ? (
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {routineDetails.map(({ day }) => (
+                <button
+                  key={day.id}
+                  type="button"
+                  className={`shrink-0 rounded-2xl border px-4 py-3 text-sm font-bold ${day.id === selectedDayId ? "border-danger bg-danger text-white" : "border-line bg-panel text-muted"}`}
+                  onClick={() => setSelectedDayId(day.id)}
+                >
+                  {day.name}
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          {selectedDay ? (
+            <Card>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <Badge>{selectedDay.name}</Badge>
+                    <h3 className="mt-3 text-xl font-black tracking-[-0.04em]">Ejercicios del dia</h3>
+                  </div>
+                  <Button className="min-h-0 px-3 py-2 text-xs" onClick={() => startWorkout(selectedDay.id)}>Iniciar</Button>
+                </div>
+                {exercises.length === 0 ? (
+                  <p className="rounded-2xl border border-line bg-ink p-4 text-sm text-muted">Crea ejercicios en Mas antes de anadirlos a una rutina.</p>
+                ) : (
+                  <>
+                    <Select label="Ejercicio" value={selectedExerciseId} onChange={(event) => setSelectedExerciseId(event.target.value)}>
+                      {exercises.map((exercise) => <option key={exercise.id} value={exercise.id}>{exercise.name}</option>)}
+                    </Select>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Input label="Series" type="number" min="1" value={targetSets} onChange={(event) => setTargetSets(event.target.value)} />
+                      <Select label="Estructura" value={structureType} onChange={(event) => setStructureType(event.target.value as "normal" | "top_set_back_off")}>
+                        <option value="normal">normal</option>
+                        <option value="top_set_back_off">top + back off</option>
+                      </Select>
+                    </div>
+                    <Input label="Descanso normal" type="number" min="1" value={restSeconds} onChange={(event) => setRestSeconds(event.target.value)} />
+                    {structureType === "top_set_back_off" ? (
+                      <div className="grid grid-cols-3 gap-2">
+                        <Input label="Reduccion %" type="number" min="0" value={backOffReductionPercent} onChange={(event) => setBackOffReductionPercent(event.target.value)} />
+                        <Input label="Rest top" type="number" min="1" value={topSetRestSeconds} onChange={(event) => setTopSetRestSeconds(event.target.value)} />
+                        <Input label="Rest back" type="number" min="1" value={backOffRestSeconds} onChange={(event) => setBackOffRestSeconds(event.target.value)} />
+                      </div>
+                    ) : null}
+                    <Button variant="secondary" className="w-full" onClick={addRoutineExercise}>Anadir ejercicio</Button>
+                  </>
+                )}
+              </div>
+            </Card>
+          ) : null}
+
+          <div className="space-y-3">
+            {routineDetails.find((detail) => detail.day.id === selectedDayId)?.exercises.map((routineExercise) => {
+              const exercise = exercises.find((item) => item.id === routineExercise.exerciseId);
+              return (
+                <Card key={routineExercise.id} className="p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h4 className="font-bold">{exercise?.name ?? "Ejercicio archivado"}</h4>
+                      <p className="mt-1 text-xs text-muted">
+                        {routineExercise.targetSets} series · {routineExercise.structureType}
+                        {routineExercise.backOffReductionPercent ? ` · -${routineExercise.backOffReductionPercent}%` : ""}
+                      </p>
+                    </div>
+                    <Button variant="ghost" className="min-h-0 px-3 py-2 text-xs" onClick={async () => { await routineRepository.deleteExercise(routineExercise.id); await refresh(selectedRoutineId); }}>Quitar</Button>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
