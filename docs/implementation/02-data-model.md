@@ -265,7 +265,7 @@ Lookup priority:
 - Prefer same set order and same set type.
 
 ## Dexie Tables
-Suggested v1 stores:
+Current stores:
 
 ```ts
 db.version(1).stores({
@@ -282,7 +282,8 @@ db.version(1).stores({
 });
 ```
 
-Add compound indexes only when a query actually needs them.
+- Dexie v3 repairs early local databases that were created before every MVP object store existed by creating any missing stores during upgrade.
+- Add compound indexes only when a query actually needs them.
 
 ## Backup Format
 ```ts

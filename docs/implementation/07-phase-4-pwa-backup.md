@@ -10,7 +10,7 @@ Validation:
 
 Notes:
 - PWA is configured through `vite-plugin-pwa` with generated manifest and service worker.
-- Backup export includes all MVP stores, including `restTimers` from Dexie v2.
+- Backup export includes all MVP stores, including `restTimers`; Dexie v3 repairs early local databases with missing stores.
 - Import mode is replace-all with confirmation and shape/reference validation before writing.
 - Delete local data requires confirmation and reseeds muscle groups/settings.
 
