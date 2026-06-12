@@ -8,6 +8,7 @@ import { Input } from "../../components/ui/Input";
 import { workoutRepository } from "../../db/repositories/workoutRepository";
 import type { Exercise } from "../../domain/exercises/exerciseTypes";
 import { getRemainingRestSeconds } from "../../domain/restTimer/restTimerRules";
+import { formatSecondsAsRestMinutes } from "../../domain/restTimer/restTimeFormat";
 import type { RestTimerState } from "../../domain/restTimer/restTimerTypes";
 import type { RoutineExercise } from "../../domain/routines/routineTypes";
 import { calculateEffectiveSetCount, calculateKgVolume } from "../../domain/volume/volumeCalculations";
@@ -45,6 +46,7 @@ export function TrainingPage() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [remainingRestSeconds, setRemainingRestSeconds] = useState(0);
   const [confirmAction, setConfirmAction] = useState<"finish" | "cancel" | null>(null);
+  const [notifiedTimerKey, setNotifiedTimerKey] = useState<string | null>(null);
 
   const refresh = async () => {
     const activeBundle = await workoutRepository.getActiveBundle();
@@ -67,6 +69,29 @@ export function TrainingPage() {
     }, 1000);
     return () => window.clearInterval(interval);
   }, [bundle]);
+
+  const showRestTimer = bundle?.restTimer && bundle.restTimer.status !== "idle";
+  const timerFinished = Boolean(showRestTimer && bundle?.restTimer?.status === "running" && remainingRestSeconds === 0);
+  const timerKey = bundle?.restTimer ? `${bundle.restTimer.startedAt ?? "paused"}-${bundle.restTimer.durationSeconds}` : null;
+
+  useEffect(() => {
+    if (!timerFinished || !timerKey || notifiedTimerKey === timerKey) return;
+    setNotifiedTimerKey(timerKey);
+    const AudioContextClass = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const audioContext = new AudioContextClass();
+    const oscillator = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    oscillator.type = "square";
+    oscillator.frequency.value = 880;
+    gain.gain.setValueAtTime(0.001, audioContext.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.16, audioContext.currentTime + 0.03);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.75);
+    oscillator.connect(gain);
+    gain.connect(audioContext.destination);
+    oscillator.start();
+    oscillator.stop(audioContext.currentTime + 0.8);
+  }, [notifiedTimerKey, timerFinished, timerKey]);
 
   const completedExerciseCount = useMemo(() => {
     if (!bundle) return 0;
@@ -123,6 +148,11 @@ export function TrainingPage() {
     await refresh();
   };
 
+  const startRestForExercise = async (workoutExerciseId: string) => {
+    await workoutRepository.startRestTimerForExercise(workoutExerciseId);
+    await refresh();
+  };
+
   const finishWorkout = async () => {
     if (!bundle) return;
     const hasIncompleteSets = bundle.sets.some((set) => !set.isCompleted);
@@ -159,11 +189,10 @@ export function TrainingPage() {
 
   const effectiveSets = calculateEffectiveSetCount(bundle.sets);
   const volumeKg = calculateKgVolume(bundle.sets);
-  const showRestTimer = bundle.restTimer && bundle.restTimer.status !== "idle";
 
   return (
-    <div className="space-y-4">
-      <Card className="sticky top-0 z-20 border-danger/50 bg-ink/95 backdrop-blur-xl">
+    <div className="space-y-4 pt-44">
+      <Card className="fixed left-1/2 top-0 z-30 w-full max-w-md -translate-x-1/2 rounded-t-none border-danger/50 bg-ink/95 px-5 pt-[calc(env(safe-area-inset-top)+12px)] backdrop-blur-xl">
         <div className="flex items-start justify-between gap-4">
           <div>
             <Badge tone="danger">Activo</Badge>
@@ -180,11 +209,13 @@ export function TrainingPage() {
       </Card>
 
       {showRestTimer ? (
-        <Card className="border-danger/40 bg-danger/10">
-          <div className="flex items-center justify-between gap-4">
+        <div className={`${timerFinished ? "fixed inset-0 z-50 flex items-center justify-center bg-black/82 px-5" : "fixed bottom-24 left-1/2 z-40 w-full max-w-md -translate-x-1/2 px-5"}`}>
+          <Card className={`${timerFinished ? "w-full border-danger bg-danger/20 text-center" : "border-danger/40 bg-danger/10 shadow-[0_0_40px_rgba(229,9,20,0.25)]"}`}>
+            <div className={`${timerFinished ? "space-y-5" : "flex items-center justify-between gap-4"}`}>
             <div>
-              <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-danger">Descanso</p>
-              <p className="mt-1 font-mono text-4xl font-black">{formatDuration(remainingRestSeconds).slice(3)}</p>
+              <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-danger">{timerFinished ? "Descanso terminado" : "Descanso"}</p>
+              <p className={`${timerFinished ? "mt-3 font-mono text-7xl" : "mt-1 font-mono text-4xl"} font-black`}>{formatDuration(remainingRestSeconds).slice(3)}</p>
+              <p className="mt-1 text-xs text-muted">Objetivo {formatSecondsAsRestMinutes(bundle.restTimer?.durationSeconds)} min</p>
             </div>
             <div className="grid grid-cols-2 gap-2">
               {bundle.restTimer?.status === "running" ? (
@@ -195,8 +226,9 @@ export function TrainingPage() {
               <Button variant="secondary" className="min-h-0 px-3 py-2 text-xs" onClick={resetRest}>Reset</Button>
               <Button variant="ghost" className="col-span-2 min-h-0 px-3 py-2 text-xs" onClick={skipRest}>Saltar</Button>
             </div>
-          </div>
-        </Card>
+            </div>
+          </Card>
+        </div>
       ) : null}
 
       {bundle.workoutExercises.map((workoutExercise, index) => {
@@ -213,7 +245,10 @@ export function TrainingPage() {
                   {routineExercise?.structureType === "top_set_back_off" ? "Top set + back off" : "Estructura normal"}
                 </p>
               </div>
-              <Badge>{sets.filter((set) => set.isCompleted).length}/{sets.length}</Badge>
+              <div className="grid gap-2 text-right">
+                <Badge>{sets.filter((set) => set.isCompleted).length}/{sets.length}</Badge>
+                <Button variant="ghost" className="min-h-0 px-3 py-2 text-xs" onClick={() => startRestForExercise(workoutExercise.id)}>Reloj sig. ej</Button>
+              </div>
             </div>
 
             <div className="space-y-3">
@@ -225,9 +260,10 @@ export function TrainingPage() {
                       <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted">
                         {set.setType}{typeof set.targetRir === "number" ? ` · objetivo RIR ${set.targetRir}` : ""}
                       </p>
+                      {set.suggestedWeightMultiplier ? <p className="mt-1 text-xs text-muted">Aprox. x{set.suggestedWeightMultiplier}</p> : null}
                     </div>
                     <div className="flex items-center gap-2">
-                      <Button variant="ghost" className="min-h-0 px-3 py-2 text-xs" onClick={() => startRestForSet(set.id)}>Descanso</Button>
+                      <Button variant="ghost" className="min-h-0 px-3 py-2 text-base" aria-label={`Iniciar descanso serie ${set.order}`} onClick={() => startRestForSet(set.id)}>⏱</Button>
                       <Badge tone={set.isCompleted ? "danger" : "neutral"}>{set.isCompleted ? "OK" : "Pendiente"}</Badge>
                     </div>
                   </div>
@@ -237,7 +273,7 @@ export function TrainingPage() {
                     ) : (
                       <span>Sin referencia previa</span>
                     )}
-                    {set.suggestedWeight ? <span className="mt-1 block text-danger">Sugerido back off: {set.suggestedWeight} kg</span> : null}
+                    {set.suggestedWeight ? <span className="mt-1 block text-danger">Sugerido {set.setType === "warmup" ? "aprox." : "back off"}: {set.suggestedWeight} kg</span> : null}
                   </div>
                   <div className="grid grid-cols-3 gap-2">
                     <Input

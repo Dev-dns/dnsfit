@@ -9,8 +9,10 @@ import { exerciseRepository } from "../../db/repositories/exerciseRepository";
 import { routineRepository } from "../../db/repositories/routineRepository";
 import { workoutRepository } from "../../db/repositories/workoutRepository";
 import type { Exercise } from "../../domain/exercises/exerciseTypes";
+import { parseRestMinutesToSeconds } from "../../domain/restTimer/restTimeFormat";
 import type { Routine, RoutineDay, RoutineExercise } from "../../domain/routines/routineTypes";
 import { createId, nowIso } from "../../domain/shared/entity";
+import { parseWarmupMultipliers } from "../../domain/workouts/warmups";
 
 type RoutineDetail = {
   day: RoutineDay;
@@ -27,12 +29,14 @@ export function RoutinesPage() {
   const [selectedDayId, setSelectedDayId] = useState<string>("");
   const [selectedExerciseId, setSelectedExerciseId] = useState<string>("");
   const [targetSets, setTargetSets] = useState("3");
-  const [restSeconds, setRestSeconds] = useState("180");
+  const [restMinutes, setRestMinutes] = useState("3");
   const [backOffReductionPercent, setBackOffReductionPercent] = useState("10");
   const [backOffReductionPercents, setBackOffReductionPercents] = useState<string[]>(["10", "12.5"]);
   const [targetRirs, setTargetRirs] = useState<string[]>(["2", "2", "2"]);
-  const [topSetRestSeconds, setTopSetRestSeconds] = useState("240");
-  const [backOffRestSeconds, setBackOffRestSeconds] = useState("180");
+  const [topSetRestMinutes, setTopSetRestMinutes] = useState("4");
+  const [backOffRestMinutes, setBackOffRestMinutes] = useState("3");
+  const [betweenExercisesRestMinutes, setBetweenExercisesRestMinutes] = useState("4");
+  const [warmupScheme, setWarmupScheme] = useState("");
   const [structureType, setStructureType] = useState<"normal" | "top_set_back_off">("normal");
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
@@ -138,10 +142,12 @@ export function RoutinesPage() {
       backOffSets: structureType === "top_set_back_off" ? backOffSetCount : undefined,
       backOffReductionPercent: structureType === "top_set_back_off" ? Math.max(0, Number(backOffReductionPercent) || 10) : undefined,
       backOffReductionPercents: structureType === "top_set_back_off" ? getBackOffReductionPercents() : undefined,
-      restSeconds: Math.max(1, Number(restSeconds) || 180),
+      restSeconds: parseRestMinutesToSeconds(restMinutes, 180),
       targetRirs: getTargetRirs(),
-      topSetRestSeconds: structureType === "top_set_back_off" ? Math.max(1, Number(topSetRestSeconds) || 240) : undefined,
-      backOffRestSeconds: structureType === "top_set_back_off" ? Math.max(1, Number(backOffRestSeconds) || 180) : undefined,
+      warmupWeightMultipliers: parseWarmupMultipliers(warmupScheme),
+      topSetRestSeconds: structureType === "top_set_back_off" ? parseRestMinutesToSeconds(topSetRestMinutes, 240) : undefined,
+      backOffRestSeconds: structureType === "top_set_back_off" ? parseRestMinutesToSeconds(backOffRestMinutes, 180) : undefined,
+      betweenExercisesRestSeconds: parseRestMinutesToSeconds(betweenExercisesRestMinutes, 240),
       createdAt: now,
       updatedAt: now
     });
@@ -248,7 +254,11 @@ export function RoutinesPage() {
                         <option value="top_set_back_off">top + back off</option>
                       </Select>
                     </div>
-                    <Input label="Descanso normal" type="number" min="1" value={restSeconds} onChange={(event) => setRestSeconds(event.target.value)} />
+                    <div className="grid grid-cols-2 gap-3">
+                      <Input label="Descanso serie (min)" inputMode="decimal" value={restMinutes} onChange={(event) => setRestMinutes(event.target.value)} placeholder="3 o 3.30" />
+                      <Input label="Descanso sig. ej (min)" inputMode="decimal" value={betweenExercisesRestMinutes} onChange={(event) => setBetweenExercisesRestMinutes(event.target.value)} placeholder="4 o 4.30" />
+                    </div>
+                    <Input label="Aproximaciones" value={warmupScheme} onChange={(event) => setWarmupScheme(event.target.value)} placeholder="0.5, 0.7, 0.8" />
                     <div className="rounded-3xl border border-line bg-ink p-3">
                       <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.24em] text-muted">RIR objetivo por serie</p>
                       <div className="grid grid-cols-3 gap-2">
@@ -281,8 +291,8 @@ export function RoutinesPage() {
                           ))}
                         </div>
                         <div className="grid grid-cols-2 gap-2">
-                        <Input label="Rest top" type="number" min="1" value={topSetRestSeconds} onChange={(event) => setTopSetRestSeconds(event.target.value)} />
-                        <Input label="Rest back" type="number" min="1" value={backOffRestSeconds} onChange={(event) => setBackOffRestSeconds(event.target.value)} />
+                          <Input label="Rest top (min)" inputMode="decimal" value={topSetRestMinutes} onChange={(event) => setTopSetRestMinutes(event.target.value)} />
+                          <Input label="Rest back (min)" inputMode="decimal" value={backOffRestMinutes} onChange={(event) => setBackOffRestMinutes(event.target.value)} />
                         </div>
                       </div>
                     ) : null}
@@ -302,6 +312,7 @@ export function RoutinesPage() {
               const rirSummary = routineExercise.targetRirs?.some((rir) => typeof rir === "number")
                 ? routineExercise.targetRirs.map((rir, rirIndex) => `S${rirIndex + 1}: ${typeof rir === "number" ? rir : "-"}`).join(" · ")
                 : "";
+              const warmupSummary = routineExercise.warmupWeightMultipliers?.length ? routineExercise.warmupWeightMultipliers.join(" / ") : "";
               return (
                 <Card key={routineExercise.id} className="p-4">
                   <div className="flex items-start justify-between gap-4">
@@ -312,11 +323,12 @@ export function RoutinesPage() {
                         {reductionSummary ? ` · ${reductionSummary}` : ""}
                       </p>
                       {rirSummary ? <p className="mt-1 text-xs text-muted">RIR objetivo · {rirSummary}</p> : null}
+                      {warmupSummary ? <p className="mt-1 text-xs text-muted">Aproximaciones · {warmupSummary}</p> : null}
                     </div>
-                    <div className="grid gap-2">
-                      <div className="flex gap-2">
-                        <Button variant="ghost" className="min-h-0 px-3 py-2 text-xs" disabled={index === 0} onClick={async () => { await routineRepository.moveExercise(routineExercise.id, "up"); await refresh(selectedRoutineId); }}>Subir</Button>
-                        <Button variant="ghost" className="min-h-0 px-3 py-2 text-xs" disabled={index === dayExercises.length - 1} onClick={async () => { await routineRepository.moveExercise(routineExercise.id, "down"); await refresh(selectedRoutineId); }}>Bajar</Button>
+                    <div className="grid gap-1">
+                      <div className="flex gap-1">
+                        <Button variant="ghost" className="min-h-0 px-2 py-1 text-sm" disabled={index === 0} aria-label="Subir ejercicio" onClick={async () => { await routineRepository.moveExercise(routineExercise.id, "up"); await refresh(selectedRoutineId); }}>↑</Button>
+                        <Button variant="ghost" className="min-h-0 px-2 py-1 text-sm" disabled={index === dayExercises.length - 1} aria-label="Bajar ejercicio" onClick={async () => { await routineRepository.moveExercise(routineExercise.id, "down"); await refresh(selectedRoutineId); }}>↓</Button>
                       </div>
                       <Button variant="ghost" className="min-h-0 px-3 py-2 text-xs" onClick={async () => { await routineRepository.deleteExercise(routineExercise.id); await refresh(selectedRoutineId); }}>Quitar</Button>
                     </div>

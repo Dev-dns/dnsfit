@@ -108,6 +108,7 @@ type RoutineExercise = EntityBase & {
   targetRirMin?: number;
   targetRirMax?: number;
   targetRirs?: Array<number | undefined>;
+  warmupWeightMultipliers?: number[];
   restSeconds?: number;
   topSetRestSeconds?: number;
   backOffRestSeconds?: number;
@@ -167,6 +168,7 @@ type WorkoutSet = {
   previousRir?: number;
   previousWorkoutDate?: string;
   suggestedWeight?: number;
+  suggestedWeightMultiplier?: number;
   notes?: string;
   completedAt?: string;
   createdAt: string;

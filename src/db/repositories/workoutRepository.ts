@@ -1,7 +1,8 @@
 import { createId, nowIso } from "../../domain/shared/entity";
-import { getRestSecondsForSet } from "../../domain/restTimer/restTimerRules";
+import { getRestSecondsBetweenExercises, getRestSecondsForSet } from "../../domain/restTimer/restTimerRules";
 import type { Workout, WorkoutExercise, WorkoutSet, WorkoutSetType } from "../../domain/workouts/workoutTypes";
 import { calculateBackOffWeight } from "../../domain/workouts/backOff";
+import { calculateWarmupWeight } from "../../domain/workouts/warmups";
 import { calculateKgVolume, isEffectiveSet } from "../../domain/volume/volumeCalculations";
 import { db } from "../db";
 
@@ -20,6 +21,11 @@ const getBackOffReductionPercent = (reductionPercents: number[] | undefined, fal
   const indexedPercent = reductionPercents?.[backOffIndex];
   return indexedPercent ?? fallbackPercent ?? 10;
 };
+
+const getPlannedSetTypes = (routineExercise: { structureType: "normal" | "top_set_back_off"; targetSets: number; topSets?: number; backOffSets?: number; warmupWeightMultipliers?: number[] }) => [
+  ...Array.from({ length: routineExercise.warmupWeightMultipliers?.length ?? 0 }, () => "warmup" as const),
+  ...getSetTypes(routineExercise.structureType, routineExercise.targetSets, routineExercise.topSets, routineExercise.backOffSets)
+];
 
 const findPreviousSet = async (exerciseId: string, routineDayId: string | undefined, setOrder: number, setType: WorkoutSetType) => {
   const completedWorkouts = await db.workouts.where("status").equals("completed").reverse().sortBy("startedAt");
@@ -100,14 +106,11 @@ export const workoutRepository = {
         };
         await db.workoutExercises.add(workoutExercise);
 
-        const setTypes = getSetTypes(
-          routineExercise.structureType,
-          routineExercise.targetSets,
-          routineExercise.topSets,
-          routineExercise.backOffSets
-        );
+        const setTypes = getPlannedSetTypes(routineExercise);
 
+        let workingSetIndex = 0;
         for (const [setIndex, setType] of setTypes.entries()) {
+          const isWorkingSet = setType !== "warmup";
           const previous = await findPreviousSet(routineExercise.exerciseId, routineDayId, setIndex + 1, setType);
           await db.workoutSets.add({
             id: createId(),
@@ -116,8 +119,9 @@ export const workoutRepository = {
             exerciseId: routineExercise.exerciseId,
             order: setIndex + 1,
             setType,
-            targetRir: routineExercise.targetRirs?.[setIndex],
+            targetRir: isWorkingSet ? routineExercise.targetRirs?.[workingSetIndex] : undefined,
             isCompleted: false,
+            suggestedWeightMultiplier: setType === "warmup" ? routineExercise.warmupWeightMultipliers?.[setIndex] : undefined,
             previousWeight: previous?.set.weight,
             previousReps: previous?.set.reps,
             previousRir: previous?.set.rir,
@@ -125,6 +129,7 @@ export const workoutRepository = {
             createdAt: now,
             updatedAt: now
           });
+          if (isWorkingSet) workingSetIndex += 1;
         }
       }
     });
@@ -146,15 +151,29 @@ export const workoutRepository = {
         updatedAt: nowIso()
       });
 
-      if (current.setType === "top_set" && typeof next.weight === "number") {
+      if ((current.setType === "top_set" || current.setType === "normal") && typeof next.weight === "number") {
         const workoutExercise = await db.workoutExercises.get(current.workoutExerciseId);
         const routineExercise = workoutExercise?.routineExerciseId ? await db.routineExercises.get(workoutExercise.routineExerciseId) : undefined;
+        const workoutSets = await db.workoutSets.where("workoutExerciseId").equals(current.workoutExerciseId).sortBy("order");
+        const firstWorkingSet = workoutSets.find((set) => set.setType !== "warmup");
+        const shouldSuggestFromCurrent = firstWorkingSet?.id === current.id;
         if (routineExercise) {
-          const backOffSets = await db.workoutSets
-            .where("workoutExerciseId")
-            .equals(current.workoutExerciseId)
-            .and((set) => set.setType === "back_off")
-            .toArray();
+          if (shouldSuggestFromCurrent) {
+            const warmupSets = workoutSets.filter((set) => set.setType === "warmup");
+            for (const [warmupIndex, warmupSet] of warmupSets.entries()) {
+              const multiplier = routineExercise.warmupWeightMultipliers?.[warmupIndex] ?? warmupSet.suggestedWeightMultiplier;
+              if (!multiplier) continue;
+              const suggestedWeight = calculateWarmupWeight(next.weight, multiplier);
+              const shouldUpdateWeight = warmupSet.weight === undefined || warmupSet.weight === warmupSet.suggestedWeight;
+              await db.workoutSets.update(warmupSet.id, {
+                suggestedWeight,
+                weight: shouldUpdateWeight ? suggestedWeight : warmupSet.weight,
+                updatedAt: nowIso()
+              });
+            }
+          }
+
+          const backOffSets = workoutSets.filter((set) => set.setType === "back_off");
 
           for (const [backOffIndex, backOffSet] of backOffSets.sort((a, b) => a.order - b.order).entries()) {
             const reductionPercent = getBackOffReductionPercent(routineExercise.backOffReductionPercents, routineExercise.backOffReductionPercent, backOffIndex);
@@ -199,6 +218,24 @@ export const workoutRepository = {
     await db.restTimers.put({
       id: set.workoutId,
       workoutId: set.workoutId,
+      durationSeconds,
+      startedAt: now,
+      status: "running",
+      createdAt: now,
+      updatedAt: now
+    });
+  },
+  startRestTimerForExercise: async (workoutExerciseId: string) => {
+    const workoutExercise = await db.workoutExercises.get(workoutExerciseId);
+    if (!workoutExercise) return;
+
+    const routineExercise = workoutExercise.routineExerciseId ? await db.routineExercises.get(workoutExercise.routineExerciseId) : undefined;
+    const settings = await db.settings.get("global");
+    const durationSeconds = getRestSecondsBetweenExercises(routineExercise, settings);
+    const now = nowIso();
+    await db.restTimers.put({
+      id: workoutExercise.workoutId,
+      workoutId: workoutExercise.workoutId,
       durationSeconds,
       startedAt: now,
       status: "running",

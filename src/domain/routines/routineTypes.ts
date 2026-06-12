@@ -33,6 +33,7 @@ export type RoutineExercise = EntityBase & {
   targetRirMin?: number;
   targetRirMax?: number;
   targetRirs?: Array<number | undefined>;
+  warmupWeightMultipliers?: number[];
   restSeconds?: number;
   topSetRestSeconds?: number;
   backOffRestSeconds?: number;

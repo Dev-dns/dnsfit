@@ -38,6 +38,7 @@ export type WorkoutSet = EntityBase & {
   previousRir?: number;
   previousWorkoutDate?: string;
   suggestedWeight?: number;
+  suggestedWeightMultiplier?: number;
   notes?: string;
   completedAt?: string;
 };

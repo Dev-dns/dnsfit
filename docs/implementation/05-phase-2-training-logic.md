@@ -12,7 +12,7 @@ Notes:
 - Previous references are captured when a workout is started, using completed workout history.
 - Back off suggestions are generated after top set weight changes and preserve manually edited back off weights.
 - Rest timer state is persisted in the `restTimers` store with one timer per workout.
-- 2026-06-12 update: routine setup supports per-backoff reduction percentages, per-set target RIR, routine exercise reordering, manual rest timer starts, and previous-reference dates.
+- 2026-06-12 update: routine setup supports per-backoff reduction percentages, per-set target RIR, warmup/approach schemes, routine exercise reordering, manual rest timer starts, and previous-reference dates.
 - Advanced exercise history drawer and full final summary screen remain future polish beyond the core Phase 2 logic.
 
 ## Objective
@@ -23,6 +23,7 @@ Add the dnsfit-specific training behavior: top set + back off, back off weight s
 - Configure top sets, back off sets, reduction percent, rep targets, RIR targets, and rest times.
 - Configure each back off set with its own reduction percent when needed.
 - Configure each planned set with its own target RIR.
+- Configure warmup/approach schemes as working-weight multipliers such as `0.5, 0.7, 0.8`.
 - Generate set types from routine configuration.
 - Suggest back off weight after top set weight is entered.
 - Let users override suggested weight.
@@ -59,6 +60,7 @@ Use `RoutineExercise` fields:
 - `backOffRepsMin` / `backOffRepsMax`
 - `targetRirMin` / `targetRirMax`
 - `targetRirs`
+- `warmupWeightMultipliers`
 - `restSeconds`
 - `topSetRestSeconds`
 - `backOffRestSeconds`
@@ -72,6 +74,7 @@ Use `WorkoutSet` fields:
 - `previousWorkoutDate`
 - `targetRir`
 - `suggestedWeight`
+- `suggestedWeightMultiplier`
 - `isCompleted`
 - `completedAt`
 
@@ -111,6 +114,7 @@ Rest timer state is persisted in the `restTimers` store. The timer id is the act
 - Store previous reference values on the set for display consistency during the active workout.
 - Store previous reference date on the set so the active workout shows when the reference happened.
 - Store target RIR on generated workout sets so later routine edits do not mutate an active workout target.
+- Store warmup multiplier snapshots on generated warmup sets and suggest warmup weights from the first effective set weight.
 - Use completed workouts as the source for future references.
 - Persist timer timestamps if timer restore is implemented.
 

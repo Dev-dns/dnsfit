@@ -8,6 +8,10 @@ export const getRestSecondsForSet = (set: WorkoutSet, routineExercise: RoutineEx
   return routineExercise?.restSeconds ?? settings?.defaultRestSeconds ?? 180;
 };
 
+export const getRestSecondsBetweenExercises = (routineExercise: RoutineExercise | undefined, settings: Settings | undefined) => (
+  routineExercise?.betweenExercisesRestSeconds ?? settings?.defaultBetweenExercisesRestSeconds ?? 240
+);
+
 export const getRemainingRestSeconds = (timer: { status: "idle" | "running" | "paused"; startedAt?: string; durationSeconds: number; remainingSeconds?: number }) => {
   if (timer.status === "paused") return timer.remainingSeconds ?? timer.durationSeconds;
   if (timer.status !== "running" || !timer.startedAt) return 0;
