@@ -23,6 +23,7 @@ export type RoutineExercise = EntityBase & {
   topSets?: number;
   backOffSets?: number;
   backOffReductionPercent?: number;
+  backOffReductionPercents?: number[];
   targetRepsMin?: number;
   targetRepsMax?: number;
   topSetRepsMin?: number;
@@ -31,6 +32,7 @@ export type RoutineExercise = EntityBase & {
   backOffRepsMax?: number;
   targetRirMin?: number;
   targetRirMax?: number;
+  targetRirs?: Array<number | undefined>;
   restSeconds?: number;
   topSetRestSeconds?: number;
   backOffRestSeconds?: number;

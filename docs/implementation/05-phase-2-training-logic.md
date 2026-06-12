@@ -12,6 +12,7 @@ Notes:
 - Previous references are captured when a workout is started, using completed workout history.
 - Back off suggestions are generated after top set weight changes and preserve manually edited back off weights.
 - Rest timer state is persisted in the `restTimers` store with one timer per workout.
+- 2026-06-12 update: routine setup supports per-backoff reduction percentages, per-set target RIR, routine exercise reordering, manual rest timer starts, and previous-reference dates.
 - Advanced exercise history drawer and full final summary screen remain future polish beyond the core Phase 2 logic.
 
 ## Objective
@@ -20,11 +21,14 @@ Add the dnsfit-specific training behavior: top set + back off, back off weight s
 ## Scope
 - Configure `normal` and `top_set_back_off` routine exercises.
 - Configure top sets, back off sets, reduction percent, rep targets, RIR targets, and rest times.
+- Configure each back off set with its own reduction percent when needed.
+- Configure each planned set with its own target RIR.
 - Generate set types from routine configuration.
 - Suggest back off weight after top set weight is entered.
 - Let users override suggested weight.
 - Show previous references for each set.
 - Add adaptive rest timer with start, pause, resume, reset, and skip.
+- Let the user manually start the rest timer from any active workout set.
 - Restore rest timer after reload when feasible.
 - Improve workout completion summary with effective sets and total volume.
 
@@ -50,9 +54,11 @@ Use `RoutineExercise` fields:
 - `topSets`
 - `backOffSets`
 - `backOffReductionPercent`
+- `backOffReductionPercents`
 - `topSetRepsMin` / `topSetRepsMax`
 - `backOffRepsMin` / `backOffRepsMax`
 - `targetRirMin` / `targetRirMax`
+- `targetRirs`
 - `restSeconds`
 - `topSetRestSeconds`
 - `backOffRestSeconds`
@@ -63,6 +69,8 @@ Use `WorkoutSet` fields:
 - `previousWeight`
 - `previousReps`
 - `previousRir`
+- `previousWorkoutDate`
+- `targetRir`
 - `suggestedWeight`
 - `isCompleted`
 - `completedAt`
@@ -101,6 +109,8 @@ Rest timer state is persisted in the `restTimers` store. The timer id is the act
 - Store generated set types explicitly.
 - Store suggested weight separately from actual edited weight.
 - Store previous reference values on the set for display consistency during the active workout.
+- Store previous reference date on the set so the active workout shows when the reference happened.
+- Store target RIR on generated workout sets so later routine edits do not mutate an active workout target.
 - Use completed workouts as the source for future references.
 - Persist timer timestamps if timer restore is implemented.
 

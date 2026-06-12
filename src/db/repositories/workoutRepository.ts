@@ -16,6 +16,11 @@ const getSetTypes = (structureType: "normal" | "top_set_back_off", targetSets: n
   ];
 };
 
+const getBackOffReductionPercent = (reductionPercents: number[] | undefined, fallbackPercent: number | undefined, backOffIndex: number) => {
+  const indexedPercent = reductionPercents?.[backOffIndex];
+  return indexedPercent ?? fallbackPercent ?? 10;
+};
+
 const findPreviousSet = async (exerciseId: string, routineDayId: string | undefined, setOrder: number, setType: WorkoutSetType) => {
   const completedWorkouts = await db.workouts.where("status").equals("completed").reverse().sortBy("startedAt");
   const sameDayWorkout = completedWorkouts.find((workout) => workout.routineDayId && workout.routineDayId === routineDayId);
@@ -31,7 +36,7 @@ const findPreviousSet = async (exerciseId: string, routineDayId: string | undefi
     const sameType = sets.find((set) => set.setType === setType);
     const fallback = sets[setOrder - 1] ?? sets[0];
     const reference = exact ?? sameOrder ?? sameType ?? fallback;
-    if (reference) return reference;
+    if (reference) return { set: reference, workout };
   }
 
   return undefined;
@@ -111,10 +116,12 @@ export const workoutRepository = {
             exerciseId: routineExercise.exerciseId,
             order: setIndex + 1,
             setType,
+            targetRir: routineExercise.targetRirs?.[setIndex],
             isCompleted: false,
-            previousWeight: previous?.weight,
-            previousReps: previous?.reps,
-            previousRir: previous?.rir,
+            previousWeight: previous?.set.weight,
+            previousReps: previous?.set.reps,
+            previousRir: previous?.set.rir,
+            previousWorkoutDate: previous?.workout.startedAt,
             createdAt: now,
             updatedAt: now
           });
@@ -142,15 +149,16 @@ export const workoutRepository = {
       if (current.setType === "top_set" && typeof next.weight === "number") {
         const workoutExercise = await db.workoutExercises.get(current.workoutExerciseId);
         const routineExercise = workoutExercise?.routineExerciseId ? await db.routineExercises.get(workoutExercise.routineExerciseId) : undefined;
-        if (routineExercise?.backOffReductionPercent) {
-          const suggestedWeight = calculateBackOffWeight(next.weight, routineExercise.backOffReductionPercent);
+        if (routineExercise) {
           const backOffSets = await db.workoutSets
             .where("workoutExerciseId")
             .equals(current.workoutExerciseId)
             .and((set) => set.setType === "back_off")
             .toArray();
 
-          for (const backOffSet of backOffSets) {
+          for (const [backOffIndex, backOffSet] of backOffSets.sort((a, b) => a.order - b.order).entries()) {
+            const reductionPercent = getBackOffReductionPercent(routineExercise.backOffReductionPercents, routineExercise.backOffReductionPercent, backOffIndex);
+            const suggestedWeight = calculateBackOffWeight(next.weight, reductionPercent);
             const shouldUpdateWeight = backOffSet.weight === undefined || backOffSet.weight === backOffSet.suggestedWeight;
             await db.workoutSets.update(backOffSet.id, {
               suggestedWeight,
@@ -177,6 +185,25 @@ export const workoutRepository = {
           updatedAt: now
         });
       }
+    });
+  },
+  startRestTimerForSet: async (setId: string) => {
+    const set = await db.workoutSets.get(setId);
+    if (!set) return;
+
+    const workoutExercise = await db.workoutExercises.get(set.workoutExerciseId);
+    const routineExercise = workoutExercise?.routineExerciseId ? await db.routineExercises.get(workoutExercise.routineExerciseId) : undefined;
+    const settings = await db.settings.get("global");
+    const durationSeconds = getRestSecondsForSet(set, routineExercise, settings);
+    const now = nowIso();
+    await db.restTimers.put({
+      id: set.workoutId,
+      workoutId: set.workoutId,
+      durationSeconds,
+      startedAt: now,
+      status: "running",
+      createdAt: now,
+      updatedAt: now
     });
   },
   pauseRestTimer: async (workoutId: string, remainingSeconds: number) => {

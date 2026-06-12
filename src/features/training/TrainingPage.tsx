@@ -35,6 +35,11 @@ const parseOptionalNumber = (value: string) => {
   return Number.isFinite(parsed) ? parsed : undefined;
 };
 
+const formatReferenceDate = (value: string | undefined) => {
+  if (!value) return undefined;
+  return new Intl.DateTimeFormat("es", { day: "2-digit", month: "2-digit", year: "2-digit" }).format(new Date(value));
+};
+
 export function TrainingPage() {
   const [bundle, setBundle] = useState<ActiveBundle | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -113,6 +118,11 @@ export function TrainingPage() {
     await refresh();
   };
 
+  const startRestForSet = async (setId: string) => {
+    await workoutRepository.startRestTimerForSet(setId);
+    await refresh();
+  };
+
   const finishWorkout = async () => {
     if (!bundle) return;
     const hasIncompleteSets = bundle.sets.some((set) => !set.isCompleted);
@@ -142,6 +152,7 @@ export function TrainingPage() {
         title="No hay entreno activo"
         description="Inicia una sesion desde Rutinas. Si cierras la app durante un entreno, aparecera aqui al volver."
         actionLabel="Ir a rutinas"
+        onAction={() => { window.location.hash = "routines"; }}
       />
     );
   }
@@ -152,7 +163,7 @@ export function TrainingPage() {
 
   return (
     <div className="space-y-4">
-      <Card className="sticky top-24 z-10 border-danger/50 bg-ink/95 backdrop-blur-xl">
+      <Card className="sticky top-0 z-20 border-danger/50 bg-ink/95 backdrop-blur-xl">
         <div className="flex items-start justify-between gap-4">
           <div>
             <Badge tone="danger">Activo</Badge>
@@ -211,13 +222,18 @@ export function TrainingPage() {
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <div>
                       <p className="text-sm font-black">Serie {set.order}</p>
-                      <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted">{set.setType}</p>
+                      <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted">
+                        {set.setType}{typeof set.targetRir === "number" ? ` · objetivo RIR ${set.targetRir}` : ""}
+                      </p>
                     </div>
-                    <Badge tone={set.isCompleted ? "danger" : "neutral"}>{set.isCompleted ? "OK" : "Pendiente"}</Badge>
+                    <div className="flex items-center gap-2">
+                      <Button variant="ghost" className="min-h-0 px-3 py-2 text-xs" onClick={() => startRestForSet(set.id)}>Descanso</Button>
+                      <Badge tone={set.isCompleted ? "danger" : "neutral"}>{set.isCompleted ? "OK" : "Pendiente"}</Badge>
+                    </div>
                   </div>
                   <div className="mb-3 rounded-2xl border border-line bg-panel px-3 py-2 text-xs text-muted">
                     {set.previousWeight || set.previousReps || set.previousRir ? (
-                      <span>Anterior: {set.previousWeight ?? "-"} kg x {set.previousReps ?? "-"} @ {set.previousRir ?? "-"}</span>
+                      <span>Anterior{formatReferenceDate(set.previousWorkoutDate) ? ` (${formatReferenceDate(set.previousWorkoutDate)})` : ""}: {set.previousWeight ?? "-"} kg x {set.previousReps ?? "-"} @ {set.previousRir ?? "-"}</span>
                     ) : (
                       <span>Sin referencia previa</span>
                     )}

@@ -29,6 +29,8 @@ export function RoutinesPage() {
   const [targetSets, setTargetSets] = useState("3");
   const [restSeconds, setRestSeconds] = useState("180");
   const [backOffReductionPercent, setBackOffReductionPercent] = useState("10");
+  const [backOffReductionPercents, setBackOffReductionPercents] = useState<string[]>(["10", "12.5"]);
+  const [targetRirs, setTargetRirs] = useState<string[]>(["2", "2", "2"]);
   const [topSetRestSeconds, setTopSetRestSeconds] = useState("240");
   const [backOffRestSeconds, setBackOffRestSeconds] = useState("180");
   const [structureType, setStructureType] = useState<"normal" | "top_set_back_off">("normal");
@@ -57,6 +59,36 @@ export function RoutinesPage() {
 
   const selectedRoutine = routines.find((routine) => routine.id === selectedRoutineId);
   const selectedDay = routineDetails.find((detail) => detail.day.id === selectedDayId)?.day;
+  const targetSetCount = Math.max(1, Number(targetSets) || 1);
+  const backOffSetCount = structureType === "top_set_back_off" ? Math.max(1, (Number(targetSets) || 3) - 1) : 0;
+
+  const getBackOffReductionPercents = () => Array.from({ length: backOffSetCount }, (_, index) => {
+    const value = Number(backOffReductionPercents[index] ?? backOffReductionPercent);
+    return Math.max(0, Number.isFinite(value) ? value : 10);
+  });
+
+  const updateBackOffReductionPercent = (index: number, value: string) => {
+    setBackOffReductionPercents((current) => {
+      const next = [...current];
+      next[index] = value;
+      return next;
+    });
+  };
+
+  const getTargetRirs = () => Array.from({ length: targetSetCount }, (_, index) => {
+    const value = targetRirs[index];
+    if (value === undefined || value.trim() === "") return undefined;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? Math.max(0, parsed) : undefined;
+  });
+
+  const updateTargetRir = (index: number, value: string) => {
+    setTargetRirs((current) => {
+      const next = [...current];
+      next[index] = value;
+      return next;
+    });
+  };
 
   const createRoutine = async () => {
     if (!routineName.trim()) return;
@@ -101,11 +133,13 @@ export function RoutinesPage() {
       exerciseId: selectedExerciseId,
       order: (detail?.exercises.length ?? 0) + 1,
       structureType,
-      targetSets: Math.max(1, Number(targetSets) || 1),
+      targetSets: targetSetCount,
       topSets: structureType === "top_set_back_off" ? 1 : undefined,
-      backOffSets: structureType === "top_set_back_off" ? Math.max(1, (Number(targetSets) || 3) - 1) : undefined,
+      backOffSets: structureType === "top_set_back_off" ? backOffSetCount : undefined,
       backOffReductionPercent: structureType === "top_set_back_off" ? Math.max(0, Number(backOffReductionPercent) || 10) : undefined,
+      backOffReductionPercents: structureType === "top_set_back_off" ? getBackOffReductionPercents() : undefined,
       restSeconds: Math.max(1, Number(restSeconds) || 180),
+      targetRirs: getTargetRirs(),
       topSetRestSeconds: structureType === "top_set_back_off" ? Math.max(1, Number(topSetRestSeconds) || 240) : undefined,
       backOffRestSeconds: structureType === "top_set_back_off" ? Math.max(1, Number(backOffRestSeconds) || 180) : undefined,
       createdAt: now,
@@ -215,11 +249,41 @@ export function RoutinesPage() {
                       </Select>
                     </div>
                     <Input label="Descanso normal" type="number" min="1" value={restSeconds} onChange={(event) => setRestSeconds(event.target.value)} />
-                    {structureType === "top_set_back_off" ? (
+                    <div className="rounded-3xl border border-line bg-ink p-3">
+                      <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.24em] text-muted">RIR objetivo por serie</p>
                       <div className="grid grid-cols-3 gap-2">
-                        <Input label="Reduccion %" type="number" min="0" value={backOffReductionPercent} onChange={(event) => setBackOffReductionPercent(event.target.value)} />
+                        {Array.from({ length: targetSetCount }, (_, index) => (
+                          <Input
+                            key={index}
+                            label={`Serie ${index + 1}`}
+                            type="number"
+                            min="0"
+                            step="0.5"
+                            value={targetRirs[index] ?? ""}
+                            onChange={(event) => updateTargetRir(index, event.target.value)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    {structureType === "top_set_back_off" ? (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-2 gap-2">
+                          {Array.from({ length: backOffSetCount }, (_, index) => (
+                            <Input
+                              key={index}
+                              label={`Back off ${index + 1} %`}
+                              type="number"
+                              min="0"
+                              step="0.5"
+                              value={backOffReductionPercents[index] ?? backOffReductionPercent}
+                              onChange={(event) => updateBackOffReductionPercent(index, event.target.value)}
+                            />
+                          ))}
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
                         <Input label="Rest top" type="number" min="1" value={topSetRestSeconds} onChange={(event) => setTopSetRestSeconds(event.target.value)} />
                         <Input label="Rest back" type="number" min="1" value={backOffRestSeconds} onChange={(event) => setBackOffRestSeconds(event.target.value)} />
+                        </div>
                       </div>
                     ) : null}
                     <Button variant="secondary" className="w-full" onClick={addRoutineExercise}>Anadir ejercicio</Button>
@@ -230,8 +294,14 @@ export function RoutinesPage() {
           ) : null}
 
           <div className="space-y-3">
-            {routineDetails.find((detail) => detail.day.id === selectedDayId)?.exercises.map((routineExercise) => {
+            {routineDetails.find((detail) => detail.day.id === selectedDayId)?.exercises.map((routineExercise, index, dayExercises) => {
               const exercise = exercises.find((item) => item.id === routineExercise.exerciseId);
+              const reductionSummary = routineExercise.backOffReductionPercents?.length
+                ? routineExercise.backOffReductionPercents.map((percent) => `-${percent}%`).join(" / ")
+                : routineExercise.backOffReductionPercent ? `-${routineExercise.backOffReductionPercent}%` : "";
+              const rirSummary = routineExercise.targetRirs?.some((rir) => typeof rir === "number")
+                ? routineExercise.targetRirs.map((rir, rirIndex) => `S${rirIndex + 1}: ${typeof rir === "number" ? rir : "-"}`).join(" · ")
+                : "";
               return (
                 <Card key={routineExercise.id} className="p-4">
                   <div className="flex items-start justify-between gap-4">
@@ -239,10 +309,17 @@ export function RoutinesPage() {
                       <h4 className="font-bold">{exercise?.name ?? "Ejercicio archivado"}</h4>
                       <p className="mt-1 text-xs text-muted">
                         {routineExercise.targetSets} series · {routineExercise.structureType}
-                        {routineExercise.backOffReductionPercent ? ` · -${routineExercise.backOffReductionPercent}%` : ""}
+                        {reductionSummary ? ` · ${reductionSummary}` : ""}
                       </p>
+                      {rirSummary ? <p className="mt-1 text-xs text-muted">RIR objetivo · {rirSummary}</p> : null}
                     </div>
-                    <Button variant="ghost" className="min-h-0 px-3 py-2 text-xs" onClick={async () => { await routineRepository.deleteExercise(routineExercise.id); await refresh(selectedRoutineId); }}>Quitar</Button>
+                    <div className="grid gap-2">
+                      <div className="flex gap-2">
+                        <Button variant="ghost" className="min-h-0 px-3 py-2 text-xs" disabled={index === 0} onClick={async () => { await routineRepository.moveExercise(routineExercise.id, "up"); await refresh(selectedRoutineId); }}>Subir</Button>
+                        <Button variant="ghost" className="min-h-0 px-3 py-2 text-xs" disabled={index === dayExercises.length - 1} onClick={async () => { await routineRepository.moveExercise(routineExercise.id, "down"); await refresh(selectedRoutineId); }}>Bajar</Button>
+                      </div>
+                      <Button variant="ghost" className="min-h-0 px-3 py-2 text-xs" onClick={async () => { await routineRepository.deleteExercise(routineExercise.id); await refresh(selectedRoutineId); }}>Quitar</Button>
+                    </div>
                   </div>
                 </Card>
               );
