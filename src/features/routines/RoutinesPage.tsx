@@ -32,7 +32,8 @@ export function RoutinesPage() {
   const [backOffReductionPercent, setBackOffReductionPercent] = useState("10");
   const [backOffReductionPercents, setBackOffReductionPercents] = useState<string[]>(["10", "12.5"]);
   const [plannedTopSetWeight, setPlannedTopSetWeight] = useState("");
-  const [targetReps, setTargetReps] = useState<string[]>(["8", "10", "10"]);
+  const [targetRepsMin, setTargetRepsMin] = useState<string[]>(["8", "8", "8"]);
+  const [targetRepsMax, setTargetRepsMax] = useState<string[]>(["10", "10", "10"]);
   const [targetRirs, setTargetRirs] = useState<string[]>(["2", "2", "2"]);
   const [topSetRestMinutes, setTopSetRestMinutes] = useState("4");
   const [backOffRestMinutes, setBackOffRestMinutes] = useState("3");
@@ -93,15 +94,27 @@ export function RoutinesPage() {
     return Number.isFinite(parsed) ? Math.max(0, parsed) : undefined;
   });
 
-  const getTargetReps = () => Array.from({ length: targetSetCount }, (_, index) => {
-    const value = targetReps[index];
+  const parseTargetRepValue = (value: string | undefined) => {
     if (value === undefined || value.trim() === "") return undefined;
     const parsed = Number(value);
     return Number.isFinite(parsed) ? Math.max(1, parsed) : undefined;
-  });
+  };
 
-  const updateTargetReps = (index: number, value: string) => {
-    setTargetReps((current) => {
+  const getTargetRepRanges = () => Array.from({ length: targetSetCount }, (_, index) => ({
+    min: parseTargetRepValue(targetRepsMin[index]),
+    max: parseTargetRepValue(targetRepsMax[index])
+  }));
+
+  const updateTargetRepMin = (index: number, value: string) => {
+    setTargetRepsMin((current) => {
+      const next = [...current];
+      next[index] = value;
+      return next;
+    });
+  };
+
+  const updateTargetRepMax = (index: number, value: string) => {
+    setTargetRepsMax((current) => {
       const next = [...current];
       next[index] = value;
       return next;
@@ -186,7 +199,7 @@ export function RoutinesPage() {
       backOffReductionPercents: structureType === "top_set_back_off" ? getBackOffReductionPercents() : undefined,
       plannedTopSetWeight: Number(plannedTopSetWeight) > 0 ? Number(plannedTopSetWeight) : undefined,
       restSeconds: parseRestMinutesToSeconds(restMinutes, 180),
-      targetReps: getTargetReps(),
+      targetRepRanges: getTargetRepRanges(),
       targetRirs: getTargetRirs(),
       warmupWeightMultipliers: getWarmupPercents(),
       warmupTargetReps: getWarmupTargetReps(),
@@ -334,12 +347,18 @@ export function RoutinesPage() {
                       <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.24em] text-muted">Objetivo por serie</p>
                       <div className="space-y-3">
                         {Array.from({ length: targetSetCount }, (_, index) => (
-                          <div key={index} className="grid grid-cols-2 gap-2 rounded-2xl border border-line bg-panel p-3">
+                          <div key={index} className="grid grid-cols-3 gap-2 rounded-2xl border border-line bg-panel p-3">
                             <Input
-                              label={`S${index + 1} reps`}
+                              label={`S${index + 1} min`}
                               inputMode="numeric"
-                              value={targetReps[index] ?? ""}
-                              onChange={(event) => updateTargetReps(index, event.target.value)}
+                              value={targetRepsMin[index] ?? ""}
+                              onChange={(event) => updateTargetRepMin(index, event.target.value)}
+                            />
+                            <Input
+                              label={`S${index + 1} max`}
+                              inputMode="numeric"
+                              value={targetRepsMax[index] ?? ""}
+                              onChange={(event) => updateTargetRepMax(index, event.target.value)}
                             />
                             <Input
                               label={`S${index + 1} RIR`}
@@ -390,9 +409,11 @@ export function RoutinesPage() {
               const rirSummary = routineExercise.targetRirs?.some((rir) => typeof rir === "number")
                 ? routineExercise.targetRirs.map((rir, rirIndex) => `S${rirIndex + 1}: ${typeof rir === "number" ? rir : "-"}`).join(" · ")
                 : "";
-              const repsSummary = routineExercise.targetReps?.some((reps) => typeof reps === "number")
-                ? routineExercise.targetReps.map((reps, repsIndex) => `S${repsIndex + 1}: ${typeof reps === "number" ? reps : "-"}`).join(" · ")
-                : "";
+              const repsSummary = routineExercise.targetRepRanges?.some((range) => typeof range.min === "number" || typeof range.max === "number")
+                ? routineExercise.targetRepRanges.map((range, repsIndex) => `S${repsIndex + 1}: ${range.min ?? "-"}-${range.max ?? "-"}`).join(" · ")
+                : routineExercise.targetReps?.some((reps) => typeof reps === "number")
+                  ? routineExercise.targetReps.map((reps, repsIndex) => `S${repsIndex + 1}: ${typeof reps === "number" ? reps : "-"}`).join(" · ")
+                  : "";
               const warmupSummary = routineExercise.warmupWeightMultipliers?.length
                 ? routineExercise.warmupWeightMultipliers.map((percent, warmupIndex) => `${percent}x · ${routineExercise.warmupTargetReps?.[warmupIndex] ?? "-"} reps`).join(" / ")
                 : "";

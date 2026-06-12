@@ -62,6 +62,7 @@ Use `RoutineExercise` fields:
 - `backOffRepsMin` / `backOffRepsMax`
 - `targetRirMin` / `targetRirMax`
 - `targetReps`
+- `targetRepRanges`
 - `targetRirs`
 - `warmupWeightMultipliers`
 - `warmupTargetReps`

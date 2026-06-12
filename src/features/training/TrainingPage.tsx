@@ -62,6 +62,9 @@ const formatRoutineExerciseDetails = (routineExercise: RoutineExercise | undefin
   if (routineExercise.targetReps?.some((reps) => typeof reps === "number")) {
     details.push(`Reps obj ${routineExercise.targetReps.map((reps, index) => `S${index + 1}:${typeof reps === "number" ? reps : "-"}`).join(" ")}`);
   }
+  if (routineExercise.targetRepRanges?.some((range) => typeof range.min === "number" || typeof range.max === "number")) {
+    details.push(`Rango reps ${routineExercise.targetRepRanges.map((range, index) => `S${index + 1}:${range.min ?? "-"}-${range.max ?? "-"}`).join(" ")}`);
+  }
   if (routineExercise.backOffReductionPercents?.length) {
     details.push(`Back off ${routineExercise.backOffReductionPercents.map((percent) => `-${percent}%`).join(" / ")}`);
   } else if (routineExercise.backOffReductionPercent) {
@@ -339,7 +342,7 @@ export function TrainingPage() {
                     <div>
                       <p className="text-sm font-black">Serie {set.order}</p>
                       <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted">
-                        {set.setType}{typeof set.targetReps === "number" ? ` · obj ${set.targetReps} reps` : ""}{typeof set.targetRir === "number" ? ` · RIR ${set.targetRir}` : ""}
+                        {set.setType}{typeof set.targetRepsMin === "number" || typeof set.targetRepsMax === "number" ? ` · obj ${set.targetRepsMin ?? "-"}-${set.targetRepsMax ?? "-"} reps` : typeof set.targetReps === "number" ? ` · obj ${set.targetReps} reps` : ""}{typeof set.targetRir === "number" ? ` · RIR ${set.targetRir}` : ""}
                       </p>
                       {set.suggestedWeightMultiplier ? (
                         <p className="mt-1 text-xs text-muted">
