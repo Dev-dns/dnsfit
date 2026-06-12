@@ -9,7 +9,7 @@ import { exerciseRepository } from "../../db/repositories/exerciseRepository";
 import { routineRepository } from "../../db/repositories/routineRepository";
 import { workoutRepository } from "../../db/repositories/workoutRepository";
 import type { Exercise } from "../../domain/exercises/exerciseTypes";
-import { parseRestMinutesToSeconds } from "../../domain/restTimer/restTimeFormat";
+import { formatSecondsAsRestMinutes, parseRestMinutesToSeconds } from "../../domain/restTimer/restTimeFormat";
 import type { Routine, RoutineDay, RoutineExercise } from "../../domain/routines/routineTypes";
 import { createId, nowIso } from "../../domain/shared/entity";
 
@@ -27,6 +27,7 @@ export function RoutinesPage() {
   const [dayName, setDayName] = useState("");
   const [selectedDayId, setSelectedDayId] = useState<string>("");
   const [selectedExerciseId, setSelectedExerciseId] = useState<string>("");
+  const [editingRoutineExerciseId, setEditingRoutineExerciseId] = useState<string | null>(null);
   const [targetSets, setTargetSets] = useState("3");
   const [restMinutes, setRestMinutes] = useState("3");
   const [backOffReductionPercent, setBackOffReductionPercent] = useState("10");
@@ -149,6 +150,50 @@ export function RoutinesPage() {
 
   const getWarmupRestSeconds = () => Array.from({ length: warmupSetCount }, (_, index) => parseRestMinutesToSeconds(warmupRestMinutes[index] ?? "2", 120));
 
+  const resetExerciseForm = () => {
+    setEditingRoutineExerciseId(null);
+    setTargetSets("3");
+    setRestMinutes("3");
+    setBackOffReductionPercent("10");
+    setBackOffReductionPercents(["10", "12.5"]);
+    setPlannedTopSetWeight("");
+    setTargetRepsMin(["8", "8", "8"]);
+    setTargetRepsMax(["10", "10", "10"]);
+    setTargetRirs(["2", "2", "2"]);
+    setTopSetRestMinutes("4");
+    setBackOffRestMinutes("3");
+    setBetweenExercisesRestMinutes("4");
+    setUnilateralBetweenSidesRestMinutes("0.45");
+    setWarmupCount("0");
+    setWarmupPercents(["0.5", "0.7", "0.8"]);
+    setWarmupReps(["8", "5", "3"]);
+    setWarmupRestMinutes(["1.30", "2", "2.30"]);
+    setStructureType("normal");
+  };
+
+  const editRoutineExercise = (routineExercise: RoutineExercise) => {
+    setEditingRoutineExerciseId(routineExercise.id);
+    setSelectedDayId(routineExercise.routineDayId);
+    setSelectedExerciseId(routineExercise.exerciseId);
+    setTargetSets(String(routineExercise.targetSets));
+    setRestMinutes(formatSecondsAsRestMinutes(routineExercise.restSeconds));
+    setBackOffReductionPercent(String(routineExercise.backOffReductionPercent ?? 10));
+    setBackOffReductionPercents((routineExercise.backOffReductionPercents?.length ? routineExercise.backOffReductionPercents : [routineExercise.backOffReductionPercent ?? 10]).map(String));
+    setPlannedTopSetWeight(routineExercise.plannedTopSetWeight ? String(routineExercise.plannedTopSetWeight) : "");
+    setTargetRepsMin((routineExercise.targetRepRanges?.length ? routineExercise.targetRepRanges.map((range) => range.min) : (routineExercise.targetReps?.map((reps) => reps) ?? [])).map((value) => value === undefined ? "" : String(value)));
+    setTargetRepsMax((routineExercise.targetRepRanges?.length ? routineExercise.targetRepRanges.map((range) => range.max) : (routineExercise.targetReps?.map((reps) => reps) ?? [])).map((value) => value === undefined ? "" : String(value)));
+    setTargetRirs((routineExercise.targetRirs?.length ? routineExercise.targetRirs : []).map((value) => value === undefined ? "" : String(value)));
+    setTopSetRestMinutes(formatSecondsAsRestMinutes(routineExercise.topSetRestSeconds ?? 240));
+    setBackOffRestMinutes(formatSecondsAsRestMinutes(routineExercise.backOffRestSeconds ?? 180));
+    setBetweenExercisesRestMinutes(formatSecondsAsRestMinutes(routineExercise.betweenExercisesRestSeconds ?? 240));
+    setUnilateralBetweenSidesRestMinutes(formatSecondsAsRestMinutes(routineExercise.unilateralBetweenSidesRestSeconds ?? 45));
+    setWarmupCount(String(routineExercise.warmupWeightMultipliers?.length ?? 0));
+    setWarmupPercents((routineExercise.warmupWeightMultipliers?.length ? routineExercise.warmupWeightMultipliers : [0.5, 0.7, 0.8]).map(String));
+    setWarmupReps((routineExercise.warmupTargetReps?.length ? routineExercise.warmupTargetReps : [8, 5, 3]).map((value) => value === undefined ? "" : String(value)));
+    setWarmupRestMinutes((routineExercise.warmupRestSeconds?.length ? routineExercise.warmupRestSeconds : [90, 120, 150]).map(formatSecondsAsRestMinutes));
+    setStructureType(routineExercise.structureType);
+  };
+
   const createRoutine = async () => {
     if (!routineName.trim()) return;
     const now = nowIso();
@@ -184,13 +229,16 @@ export function RoutinesPage() {
 
   const addRoutineExercise = async () => {
     if (!selectedDayId || !selectedExerciseId) return;
+    const existing = editingRoutineExerciseId
+      ? routineDetails.flatMap((detailItem) => detailItem.exercises).find((exercise) => exercise.id === editingRoutineExerciseId)
+      : undefined;
     const detail = routineDetails.find((item) => item.day.id === selectedDayId);
     const now = nowIso();
     await routineRepository.putExercise({
-      id: createId(),
-      routineDayId: selectedDayId,
+      id: existing?.id ?? createId(),
+      routineDayId: existing?.routineDayId ?? selectedDayId,
       exerciseId: selectedExerciseId,
-      order: (detail?.exercises.length ?? 0) + 1,
+      order: existing?.order ?? ((detail?.exercises.length ?? 0) + 1),
       structureType,
       targetSets: targetSetCount,
       topSets: structureType === "top_set_back_off" ? 1 : undefined,
@@ -208,9 +256,10 @@ export function RoutinesPage() {
       backOffRestSeconds: structureType === "top_set_back_off" ? parseRestMinutesToSeconds(backOffRestMinutes, 180) : undefined,
       betweenExercisesRestSeconds: parseRestMinutesToSeconds(betweenExercisesRestMinutes, 240),
       unilateralBetweenSidesRestSeconds: selectedExercise?.isUnilateral ? parseRestMinutesToSeconds(unilateralBetweenSidesRestMinutes, 45) : undefined,
-      createdAt: now,
+      createdAt: existing?.createdAt ?? now,
       updatedAt: now
     });
+    resetExerciseForm();
     await refresh(selectedRoutineId);
   };
 
@@ -296,7 +345,7 @@ export function RoutinesPage() {
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <Badge>{selectedDay.name}</Badge>
-                    <h3 className="mt-3 text-xl font-black tracking-[-0.04em]">Ejercicios del dia</h3>
+                    <h3 className="mt-3 text-xl font-black tracking-[-0.04em]">{editingRoutineExerciseId ? "Editar ejercicio" : "Ejercicios del dia"}</h3>
                   </div>
                   <Button className="min-h-0 px-3 py-2 text-xs" onClick={() => startWorkout(selectedDay.id)}>Iniciar</Button>
                 </div>
@@ -393,7 +442,10 @@ export function RoutinesPage() {
                         </div>
                       </div>
                     ) : null}
-                    <Button variant="secondary" className="w-full" onClick={addRoutineExercise}>Anadir ejercicio</Button>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Button variant="secondary" className="w-full" onClick={addRoutineExercise}>{editingRoutineExerciseId ? "Guardar cambios" : "Anadir ejercicio"}</Button>
+                      <Button variant="ghost" className="w-full" onClick={resetExerciseForm}>{editingRoutineExerciseId ? "Cancelar" : "Limpiar"}</Button>
+                    </div>
                   </>
                 )}
               </div>
@@ -437,6 +489,7 @@ export function RoutinesPage() {
                         <Button variant="ghost" className="min-h-0 px-2 py-1 text-sm" disabled={index === 0} aria-label="Subir ejercicio" onClick={async () => { await routineRepository.moveExercise(routineExercise.id, "up"); await refresh(selectedRoutineId); }}>↑</Button>
                         <Button variant="ghost" className="min-h-0 px-2 py-1 text-sm" disabled={index === dayExercises.length - 1} aria-label="Bajar ejercicio" onClick={async () => { await routineRepository.moveExercise(routineExercise.id, "down"); await refresh(selectedRoutineId); }}>↓</Button>
                       </div>
+                      <Button variant="secondary" className="min-h-0 px-3 py-2 text-xs" onClick={() => editRoutineExercise(routineExercise)}>Editar</Button>
                       <Button variant="ghost" className="min-h-0 px-3 py-2 text-xs" onClick={async () => { await routineRepository.deleteExercise(routineExercise.id); await refresh(selectedRoutineId); }}>Quitar</Button>
                     </div>
                   </div>
