@@ -117,6 +117,7 @@ type RoutineExercise = EntityBase & {
   backOffRepsMax?: number;
   targetRirMin?: number;
   targetRirMax?: number;
+  targetReps?: Array<number | undefined>;
   targetRirs?: Array<number | undefined>;
   warmupWeightMultipliers?: number[];
   warmupTargetReps?: Array<number | undefined>;

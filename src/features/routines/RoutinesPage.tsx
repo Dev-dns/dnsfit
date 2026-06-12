@@ -32,6 +32,7 @@ export function RoutinesPage() {
   const [backOffReductionPercent, setBackOffReductionPercent] = useState("10");
   const [backOffReductionPercents, setBackOffReductionPercents] = useState<string[]>(["10", "12.5"]);
   const [plannedTopSetWeight, setPlannedTopSetWeight] = useState("");
+  const [targetReps, setTargetReps] = useState<string[]>(["8", "10", "10"]);
   const [targetRirs, setTargetRirs] = useState<string[]>(["2", "2", "2"]);
   const [topSetRestMinutes, setTopSetRestMinutes] = useState("4");
   const [backOffRestMinutes, setBackOffRestMinutes] = useState("3");
@@ -91,6 +92,21 @@ export function RoutinesPage() {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? Math.max(0, parsed) : undefined;
   });
+
+  const getTargetReps = () => Array.from({ length: targetSetCount }, (_, index) => {
+    const value = targetReps[index];
+    if (value === undefined || value.trim() === "") return undefined;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? Math.max(1, parsed) : undefined;
+  });
+
+  const updateTargetReps = (index: number, value: string) => {
+    setTargetReps((current) => {
+      const next = [...current];
+      next[index] = value;
+      return next;
+    });
+  };
 
   const updateTargetRir = (index: number, value: string) => {
     setTargetRirs((current) => {
@@ -170,6 +186,7 @@ export function RoutinesPage() {
       backOffReductionPercents: structureType === "top_set_back_off" ? getBackOffReductionPercents() : undefined,
       plannedTopSetWeight: Number(plannedTopSetWeight) > 0 ? Number(plannedTopSetWeight) : undefined,
       restSeconds: parseRestMinutesToSeconds(restMinutes, 180),
+      targetReps: getTargetReps(),
       targetRirs: getTargetRirs(),
       warmupWeightMultipliers: getWarmupPercents(),
       warmupTargetReps: getWarmupTargetReps(),
@@ -314,18 +331,25 @@ export function RoutinesPage() {
                       </div>
                     </div>
                     <div className="rounded-3xl border border-line bg-ink p-3">
-                      <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.24em] text-muted">RIR objetivo por serie</p>
-                      <div className="grid grid-cols-3 gap-2">
+                      <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.24em] text-muted">Objetivo por serie</p>
+                      <div className="space-y-3">
                         {Array.from({ length: targetSetCount }, (_, index) => (
-                          <Input
-                            key={index}
-                            label={`Serie ${index + 1}`}
-                            type="number"
-                            min="0"
-                            step="0.5"
-                            value={targetRirs[index] ?? ""}
-                            onChange={(event) => updateTargetRir(index, event.target.value)}
-                          />
+                          <div key={index} className="grid grid-cols-2 gap-2 rounded-2xl border border-line bg-panel p-3">
+                            <Input
+                              label={`S${index + 1} reps`}
+                              inputMode="numeric"
+                              value={targetReps[index] ?? ""}
+                              onChange={(event) => updateTargetReps(index, event.target.value)}
+                            />
+                            <Input
+                              label={`S${index + 1} RIR`}
+                              type="number"
+                              min="0"
+                              step="0.5"
+                              value={targetRirs[index] ?? ""}
+                              onChange={(event) => updateTargetRir(index, event.target.value)}
+                            />
+                          </div>
                         ))}
                       </div>
                     </div>
@@ -366,6 +390,9 @@ export function RoutinesPage() {
               const rirSummary = routineExercise.targetRirs?.some((rir) => typeof rir === "number")
                 ? routineExercise.targetRirs.map((rir, rirIndex) => `S${rirIndex + 1}: ${typeof rir === "number" ? rir : "-"}`).join(" · ")
                 : "";
+              const repsSummary = routineExercise.targetReps?.some((reps) => typeof reps === "number")
+                ? routineExercise.targetReps.map((reps, repsIndex) => `S${repsIndex + 1}: ${typeof reps === "number" ? reps : "-"}`).join(" · ")
+                : "";
               const warmupSummary = routineExercise.warmupWeightMultipliers?.length
                 ? routineExercise.warmupWeightMultipliers.map((percent, warmupIndex) => `${percent}x · ${routineExercise.warmupTargetReps?.[warmupIndex] ?? "-"} reps`).join(" / ")
                 : "";
@@ -380,6 +407,7 @@ export function RoutinesPage() {
                       </p>
                       {routineExercise.plannedTopSetWeight ? <p className="mt-1 text-xs text-muted">Top estimado · {routineExercise.plannedTopSetWeight} kg</p> : null}
                       {routineExercise.unilateralBetweenSidesRestSeconds ? <p className="mt-1 text-xs text-muted">Entre lados · {routineExercise.unilateralBetweenSidesRestSeconds}s</p> : null}
+                      {repsSummary ? <p className="mt-1 text-xs text-muted">Reps objetivo · {repsSummary}</p> : null}
                       {rirSummary ? <p className="mt-1 text-xs text-muted">RIR objetivo · {rirSummary}</p> : null}
                       {warmupSummary ? <p className="mt-1 text-xs text-muted">Aproximaciones · {warmupSummary}</p> : null}
                     </div>

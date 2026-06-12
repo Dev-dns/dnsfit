@@ -160,7 +160,7 @@ export const workoutRepository = {
             order: setIndex + 1,
             setType,
             targetRir: isWorkingSet ? routineExercise.targetRirs?.[workingSetIndex] : undefined,
-            targetReps: setType === "warmup" ? routineExercise.warmupTargetReps?.[setIndex] : undefined,
+            targetReps: setType === "warmup" ? routineExercise.warmupTargetReps?.[setIndex] : routineExercise.targetReps?.[workingSetIndex],
             plannedRestSeconds: setType === "warmup" ? routineExercise.warmupRestSeconds?.[setIndex] : undefined,
             isCompleted: false,
             suggestedWeightMultiplier: setType === "warmup" ? routineExercise.warmupWeightMultipliers?.[setIndex] : undefined,
