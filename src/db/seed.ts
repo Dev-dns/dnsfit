@@ -1,6 +1,7 @@
 import { defaultMuscleGroups } from "../domain/muscles/muscleSeeds";
 import { createDefaultSettings } from "../domain/settings/defaultSettings";
 import { db } from "./db";
+import { repairMissingObjectStores } from "./idbRepair";
 
 export const seedMuscleGroups = async () => {
   await db.transaction("rw", db.muscleGroups, async () => {
@@ -18,6 +19,7 @@ export const seedSettings = async () => {
 };
 
 export const initializeLocalData = async () => {
+  await repairMissingObjectStores();
   await db.open();
   await seedMuscleGroups();
   await seedSettings();

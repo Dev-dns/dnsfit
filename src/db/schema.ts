@@ -83,4 +83,21 @@ export const configureSchema = (db: Dexie) => {
     .upgrade((transaction) => {
       ensureMissingStores(transaction.idbtrans.db);
     });
+
+  db.version(4)
+    .stores({
+      muscleGroups: "id, bodyRegion, bodyView",
+      exercises: "id, name, primaryDirectMuscle, category, equipmentType, exerciseType, isArchived, updatedAt",
+      routines: "id, name, goal, isActive, updatedAt",
+      routineDays: "id, routineId, order, updatedAt",
+      routineExercises: "id, routineDayId, exerciseId, order, structureType, updatedAt",
+      workouts: "id, routineId, routineDayId, status, startedAt, endedAt, updatedAt",
+      workoutExercises: "id, workoutId, exerciseId, routineExerciseId, order",
+      workoutSets: "id, workoutId, workoutExerciseId, exerciseId, order, setType, isCompleted, completedAt",
+      restTimers: "id, workoutId, status, updatedAt",
+      settings: "id"
+    })
+    .upgrade((transaction) => {
+      ensureMissingStores(transaction.idbtrans.db);
+    });
 };
