@@ -209,23 +209,23 @@ export function TrainingPage() {
       </Card>
 
       {showRestTimer ? (
-        <div className={`${timerFinished ? "fixed inset-0 z-50 flex items-center justify-center bg-black/82 px-5" : "fixed bottom-24 left-1/2 z-40 w-full max-w-md -translate-x-1/2 px-5"}`}>
-          <Card className={`${timerFinished ? "w-full border-danger bg-danger/20 text-center" : "border-danger/40 bg-danger/10 shadow-[0_0_40px_rgba(229,9,20,0.25)]"}`}>
-            <div className={`${timerFinished ? "space-y-5" : "flex items-center justify-between gap-4"}`}>
-            <div>
-              <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-danger">{timerFinished ? "Descanso terminado" : "Descanso"}</p>
-              <p className={`${timerFinished ? "mt-3 font-mono text-7xl" : "mt-1 font-mono text-4xl"} font-black`}>{formatDuration(remainingRestSeconds).slice(3)}</p>
-              <p className="mt-1 text-xs text-muted">Objetivo {formatSecondsAsRestMinutes(bundle.restTimer?.durationSeconds)} min</p>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {bundle.restTimer?.status === "running" ? (
-                <Button variant="secondary" className="min-h-0 px-3 py-2 text-xs" onClick={pauseRest}>Pausar</Button>
-              ) : (
-                <Button variant="secondary" className="min-h-0 px-3 py-2 text-xs" onClick={resumeRest}>Reanudar</Button>
-              )}
-              <Button variant="secondary" className="min-h-0 px-3 py-2 text-xs" onClick={resetRest}>Reset</Button>
-              <Button variant="ghost" className="col-span-2 min-h-0 px-3 py-2 text-xs" onClick={skipRest}>Saltar</Button>
-            </div>
+        <div className={`fixed inset-0 ${timerFinished ? "z-50 bg-black/82" : "pointer-events-none z-40 bg-black/10"} flex items-center justify-center px-5`}>
+          <Card className={`${timerFinished ? "w-full max-w-md border-danger bg-danger/20 text-center shadow-[0_0_70px_rgba(229,9,20,0.45)]" : "pointer-events-auto w-full max-w-xs border-danger/50 bg-ink/96 text-center shadow-[0_0_55px_rgba(229,9,20,0.32)]"}`}>
+            <div className="space-y-4">
+              <div>
+                <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-danger">{timerFinished ? "Descanso terminado" : "Descanso activo"}</p>
+                <p className={`${timerFinished ? "mt-3 font-mono text-8xl" : "mt-2 font-mono text-6xl"} font-black`}>{formatDuration(remainingRestSeconds).slice(3)}</p>
+                <p className="mt-1 text-xs text-muted">Objetivo {formatSecondsAsRestMinutes(bundle.restTimer?.durationSeconds)} min</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {bundle.restTimer?.status === "running" ? (
+                  <Button variant="secondary" className="min-h-0 px-3 py-2 text-xs" onClick={pauseRest}>Pausar</Button>
+                ) : (
+                  <Button variant="secondary" className="min-h-0 px-3 py-2 text-xs" onClick={resumeRest}>Reanudar</Button>
+                )}
+                <Button variant="secondary" className="min-h-0 px-3 py-2 text-xs" onClick={resetRest}>Reset</Button>
+                <Button variant="ghost" className="col-span-2 min-h-0 px-3 py-2 text-xs" onClick={skipRest}>Saltar</Button>
+              </div>
             </div>
           </Card>
         </div>
@@ -263,7 +263,7 @@ export function TrainingPage() {
                       {set.suggestedWeightMultiplier ? <p className="mt-1 text-xs text-muted">Aprox. x{set.suggestedWeightMultiplier}</p> : null}
                     </div>
                     <div className="flex items-center gap-2">
-                      <Button variant="ghost" className="min-h-0 px-3 py-2 text-base" aria-label={`Iniciar descanso serie ${set.order}`} onClick={() => startRestForSet(set.id)}>⏱</Button>
+                      <Button variant="ghost" className="min-h-0 px-3 py-2 text-xs" aria-label={`Iniciar descanso serie ${set.order}`} onClick={() => startRestForSet(set.id)}>Reloj</Button>
                       <Badge tone={set.isCompleted ? "danger" : "neutral"}>{set.isCompleted ? "OK" : "Pendiente"}</Badge>
                     </div>
                   </div>
@@ -289,12 +289,13 @@ export function TrainingPage() {
                       onChange={(event) => updateSet(set.id, { reps: parseOptionalNumber(event.target.value) })}
                     />
                     <Input
-                      label="RIR"
+                      label="RIR hecho"
                       inputMode="numeric"
                       value={set.rir ?? ""}
                       onChange={(event) => updateSet(set.id, { rir: parseOptionalNumber(event.target.value) })}
                     />
                   </div>
+                  <Button variant={set.rir === 0 ? "primary" : "secondary"} className="mt-2 w-full min-h-0 px-3 py-2 text-xs" onClick={() => updateSet(set.id, { rir: 0 })}>Fallo</Button>
                 </div>
               ))}
             </div>
