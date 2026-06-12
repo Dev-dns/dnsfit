@@ -23,6 +23,15 @@ type Exercise = {
   exerciseType: "compound" | "isolation" | "cardio" | "core" | "other";
   isUnilateral: boolean;
   technicalConfig?: ExerciseTechnicalConfig;
+  manualPerformance?: {
+    maxSet?: {
+      weightKg?: number;
+      reps?: number;
+      rir?: number;
+    };
+    prWeightKg?: number;
+    rms?: Partial<Record<1 | 3 | 5 | 8 | 10, number>>;
+  };
   notes?: string;
   visualAsset?: { type: "none" | "icon" | "image"; url?: string };
   isArchived?: boolean;
@@ -99,6 +108,7 @@ type RoutineExercise = EntityBase & {
   backOffSets?: number;
   backOffReductionPercent?: number;
   backOffReductionPercents?: number[];
+  plannedTopSetWeight?: number;
   targetRepsMin?: number;
   targetRepsMax?: number;
   topSetRepsMin?: number;
@@ -109,10 +119,13 @@ type RoutineExercise = EntityBase & {
   targetRirMax?: number;
   targetRirs?: Array<number | undefined>;
   warmupWeightMultipliers?: number[];
+  warmupTargetReps?: Array<number | undefined>;
+  warmupRestSeconds?: Array<number | undefined>;
   restSeconds?: number;
   topSetRestSeconds?: number;
   backOffRestSeconds?: number;
   betweenExercisesRestSeconds?: number;
+  unilateralBetweenSidesRestSeconds?: number;
   notes?: string;
 };
 ```
@@ -160,6 +173,7 @@ type WorkoutSet = {
   setType: "warmup" | "normal" | "top_set" | "back_off" | "dropset";
   weight?: number;
   reps?: number;
+  targetReps?: number;
   rir?: number;
   targetRir?: number;
   isCompleted: boolean;
@@ -167,8 +181,10 @@ type WorkoutSet = {
   previousReps?: number;
   previousRir?: number;
   previousWorkoutDate?: string;
+  previousReferenceLabel?: string;
   suggestedWeight?: number;
   suggestedWeightMultiplier?: number;
+  plannedRestSeconds?: number;
   notes?: string;
   completedAt?: string;
   createdAt: string;

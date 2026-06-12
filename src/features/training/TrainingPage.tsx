@@ -21,6 +21,7 @@ type ActiveBundle = {
   exercises: Array<Exercise | undefined>;
   routineExercises: Array<RoutineExercise | undefined>;
   restTimer?: RestTimerState;
+  bestWeightsByExercise: Record<string, number | undefined>;
 };
 
 const formatDuration = (seconds: number) => {
@@ -39,6 +40,35 @@ const parseOptionalNumber = (value: string) => {
 const formatReferenceDate = (value: string | undefined) => {
   if (!value) return undefined;
   return new Intl.DateTimeFormat("es", { day: "2-digit", month: "2-digit", year: "2-digit" }).format(new Date(value));
+};
+
+const formatRoutineExerciseDetails = (routineExercise: RoutineExercise | undefined) => {
+  if (!routineExercise) return [];
+
+  const details = [
+    routineExercise.structureType === "top_set_back_off" ? "Top set + back off" : "Estructura normal",
+    `${routineExercise.targetSets} series efectivas`,
+    `Rest serie ${formatSecondsAsRestMinutes(routineExercise.restSeconds)} min`
+  ];
+
+  if (routineExercise.plannedTopSetWeight) details.push(`Top estimado ${routineExercise.plannedTopSetWeight} kg`);
+  if (routineExercise.topSetRestSeconds) details.push(`Rest top ${formatSecondsAsRestMinutes(routineExercise.topSetRestSeconds)} min`);
+  if (routineExercise.backOffRestSeconds) details.push(`Rest back ${formatSecondsAsRestMinutes(routineExercise.backOffRestSeconds)} min`);
+  if (routineExercise.betweenExercisesRestSeconds) details.push(`Sig. ejercicio ${formatSecondsAsRestMinutes(routineExercise.betweenExercisesRestSeconds)} min`);
+  if (routineExercise.unilateralBetweenSidesRestSeconds) details.push(`Entre lados ${formatSecondsAsRestMinutes(routineExercise.unilateralBetweenSidesRestSeconds)} min`);
+  if (routineExercise.targetRirs?.some((rir) => typeof rir === "number")) {
+    details.push(`RIR obj ${routineExercise.targetRirs.map((rir, index) => `S${index + 1}:${typeof rir === "number" ? rir : "-"}`).join(" ")}`);
+  }
+  if (routineExercise.backOffReductionPercents?.length) {
+    details.push(`Back off ${routineExercise.backOffReductionPercents.map((percent) => `-${percent}%`).join(" / ")}`);
+  } else if (routineExercise.backOffReductionPercent) {
+    details.push(`Back off -${routineExercise.backOffReductionPercent}%`);
+  }
+  if (routineExercise.warmupWeightMultipliers?.length) {
+    details.push(`Aprox ${routineExercise.warmupWeightMultipliers.map((percent, index) => `${percent}x ${routineExercise.warmupTargetReps?.[index] ?? "-"} reps`).join(" / ")}`);
+  }
+
+  return details;
 };
 
 export function TrainingPage() {
@@ -153,6 +183,18 @@ export function TrainingPage() {
     await refresh();
   };
 
+  const startSideRestForSet = async (setId: string) => {
+    await workoutRepository.startRestTimerBetweenSides(setId);
+    await refresh();
+  };
+
+  const updateWarmupTopWeight = async (workoutExerciseId: string, value: string) => {
+    const weight = parseOptionalNumber(value);
+    if (weight === undefined) return;
+    await workoutRepository.updateWarmupSuggestionsFromTopWeight(workoutExerciseId, weight);
+    await refresh();
+  };
+
   const finishWorkout = async () => {
     if (!bundle) return;
     const hasIncompleteSets = bundle.sets.some((set) => !set.isCompleted);
@@ -191,8 +233,8 @@ export function TrainingPage() {
   const volumeKg = calculateKgVolume(bundle.sets);
 
   return (
-    <div className="space-y-4 pt-44">
-      <Card className="fixed left-1/2 top-0 z-30 w-full max-w-md -translate-x-1/2 rounded-t-none border-danger/50 bg-ink/95 px-5 pt-[calc(env(safe-area-inset-top)+12px)] backdrop-blur-xl">
+    <div className="space-y-4 pt-40">
+      <Card className="fixed left-1/2 top-[calc(env(safe-area-inset-top)+92px)] z-30 w-[calc(100%-2.5rem)] max-w-[24rem] -translate-x-1/2 border-danger/50 bg-ink/95 shadow-[0_18px_48px_rgba(0,0,0,0.45)] backdrop-blur-xl">
         <div className="flex items-start justify-between gap-4">
           <div>
             <Badge tone="danger">Activo</Badge>
@@ -210,7 +252,7 @@ export function TrainingPage() {
 
       {showRestTimer ? (
         <div className={`fixed inset-0 ${timerFinished ? "z-50 bg-black/82" : "pointer-events-none z-40 bg-black/10"} flex items-center justify-center px-5`}>
-          <Card className={`${timerFinished ? "w-full max-w-md border-danger bg-danger/20 text-center shadow-[0_0_70px_rgba(229,9,20,0.45)]" : "pointer-events-auto w-full max-w-xs border-danger/50 bg-ink/96 text-center shadow-[0_0_55px_rgba(229,9,20,0.32)]"}`}>
+          <Card className={`${timerFinished ? "w-full max-w-md border-danger bg-danger/20 text-center shadow-[0_0_70px_rgba(229,9,20,0.45)]" : "pointer-events-auto w-full max-w-xs border-danger bg-danger/25 text-center shadow-[0_0_55px_rgba(229,9,20,0.36)]"}`}>
             <div className="space-y-4">
               <div>
                 <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-danger">{timerFinished ? "Descanso terminado" : "Descanso activo"}</p>
@@ -235,6 +277,9 @@ export function TrainingPage() {
         const exercise = bundle.exercises[index];
         const routineExercise = bundle.routineExercises[index];
         const sets = bundle.sets.filter((set) => set.workoutExerciseId === workoutExercise.id);
+        const routineDetails = formatRoutineExerciseDetails(routineExercise);
+        const hasWarmups = sets.some((set) => set.setType === "warmup");
+        const bestPreviousWeight = bundle.bestWeightsByExercise[workoutExercise.exerciseId];
         return (
           <Card key={workoutExercise.id}>
             <div className="mb-4 flex items-start justify-between gap-4">
@@ -251,6 +296,39 @@ export function TrainingPage() {
               </div>
             </div>
 
+            {routineDetails.length > 0 ? (
+              <div className="mb-4 rounded-3xl border border-line bg-panel p-3">
+                <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-muted">Detalles del ejercicio</p>
+                <div className="flex flex-wrap gap-2">
+                  {routineDetails.map((detail) => (
+                    <span key={detail} className="rounded-full border border-line bg-ink px-3 py-1 text-[11px] font-bold text-muted">
+                      {detail}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {exercise?.notes ? (
+              <div className="mb-4 rounded-3xl border border-danger/30 bg-danger/10 p-3">
+                <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-danger">Notas del ejercicio</p>
+                <p className="text-sm leading-6 text-white">{exercise.notes}</p>
+              </div>
+            ) : null}
+
+            {hasWarmups ? (
+              <div className="mb-4 rounded-3xl border border-line bg-panel p-3">
+                <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-muted">Calcular aproximaciones</p>
+                <Input
+                  label="Peso top en este entreno"
+                  inputMode="decimal"
+                  placeholder={bestPreviousWeight ? `Max anterior ${bestPreviousWeight} kg` : "Ej. 100"}
+                  onBlur={(event) => updateWarmupTopWeight(workoutExercise.id, event.currentTarget.value)}
+                />
+                <p className="mt-2 text-xs text-muted">Se usa para recalcular las series de aproximacion si no las has editado manualmente.</p>
+              </div>
+            ) : null}
+
             <div className="space-y-3">
               {sets.map((set) => (
                 <div key={set.id} className={`rounded-3xl border p-3 ${set.isCompleted ? "border-danger/60 bg-danger/10" : "border-line bg-ink"}`}>
@@ -260,16 +338,23 @@ export function TrainingPage() {
                       <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted">
                         {set.setType}{typeof set.targetRir === "number" ? ` · objetivo RIR ${set.targetRir}` : ""}
                       </p>
-                      {set.suggestedWeightMultiplier ? <p className="mt-1 text-xs text-muted">Aprox. x{set.suggestedWeightMultiplier}</p> : null}
+                      {set.suggestedWeightMultiplier ? (
+                        <p className="mt-1 text-xs text-muted">
+                          Aprox. x{set.suggestedWeightMultiplier}{set.targetReps ? ` · ${set.targetReps} reps` : ""}{set.plannedRestSeconds ? ` · rest ${formatSecondsAsRestMinutes(set.plannedRestSeconds)} min` : ""}
+                        </p>
+                      ) : null}
                     </div>
                     <div className="flex items-center gap-2">
-                      <Button variant="ghost" className="min-h-0 px-3 py-2 text-xs" aria-label={`Iniciar descanso serie ${set.order}`} onClick={() => startRestForSet(set.id)}>Reloj</Button>
+                      {exercise?.isUnilateral ? (
+                        <Button variant="secondary" className="min-h-0 px-3 py-2 text-xs" aria-label={`Iniciar descanso entre lados serie ${set.order}`} onClick={() => startSideRestForSet(set.id)}>Entre lados</Button>
+                      ) : null}
+                      <Button variant="ghost" className="min-h-0 px-3 py-2 text-xs" aria-label={`Iniciar descanso serie ${set.order}`} onClick={() => startRestForSet(set.id)}>Temporizador</Button>
                       <Badge tone={set.isCompleted ? "danger" : "neutral"}>{set.isCompleted ? "OK" : "Pendiente"}</Badge>
                     </div>
                   </div>
                   <div className="mb-3 rounded-2xl border border-line bg-panel px-3 py-2 text-xs text-muted">
                     {set.previousWeight || set.previousReps || set.previousRir ? (
-                      <span>Anterior{formatReferenceDate(set.previousWorkoutDate) ? ` (${formatReferenceDate(set.previousWorkoutDate)})` : ""}: {set.previousWeight ?? "-"} kg x {set.previousReps ?? "-"} @ {set.previousRir ?? "-"}</span>
+                      <span>Referencia{set.previousReferenceLabel ? ` (${set.previousReferenceLabel})` : formatReferenceDate(set.previousWorkoutDate) ? ` (${formatReferenceDate(set.previousWorkoutDate)})` : ""}: {set.previousWeight ?? "-"} kg x {set.previousReps ?? "-"} @ {set.previousRir ?? "-"}</span>
                     ) : (
                       <span>Sin referencia previa</span>
                     )}

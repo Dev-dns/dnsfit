@@ -14,6 +14,16 @@ export type ExerciseTechnicalConfig = {
   techniqueCues?: string[];
 };
 
+export type ExerciseManualPerformance = {
+  maxSet?: {
+    weightKg?: number;
+    reps?: number;
+    rir?: number;
+  };
+  prWeightKg?: number;
+  rms?: Partial<Record<1 | 3 | 5 | 8 | 10, number>>;
+};
+
 export type Exercise = EntityBase & {
   name: string;
   category: ExerciseCategory;
@@ -22,6 +32,7 @@ export type Exercise = EntityBase & {
   exerciseType: ExerciseType;
   isUnilateral: boolean;
   technicalConfig?: ExerciseTechnicalConfig;
+  manualPerformance?: ExerciseManualPerformance;
   notes?: string;
   visualAsset?: { type: "none" | "icon" | "image"; url?: string };
   isArchived?: boolean;

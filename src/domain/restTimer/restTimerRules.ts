@@ -3,6 +3,7 @@ import type { Settings } from "../settings/settingsTypes";
 import type { WorkoutSet } from "../workouts/workoutTypes";
 
 export const getRestSecondsForSet = (set: WorkoutSet, routineExercise: RoutineExercise | undefined, settings: Settings | undefined) => {
+  if (set.plannedRestSeconds) return set.plannedRestSeconds;
   if (set.setType === "top_set" && routineExercise?.topSetRestSeconds) return routineExercise.topSetRestSeconds;
   if (set.setType === "back_off" && routineExercise?.backOffRestSeconds) return routineExercise.backOffRestSeconds;
   return routineExercise?.restSeconds ?? settings?.defaultRestSeconds ?? 180;
@@ -10,6 +11,10 @@ export const getRestSecondsForSet = (set: WorkoutSet, routineExercise: RoutineEx
 
 export const getRestSecondsBetweenExercises = (routineExercise: RoutineExercise | undefined, settings: Settings | undefined) => (
   routineExercise?.betweenExercisesRestSeconds ?? settings?.defaultBetweenExercisesRestSeconds ?? 240
+);
+
+export const getRestSecondsBetweenUnilateralSides = (routineExercise: RoutineExercise | undefined) => (
+  routineExercise?.unilateralBetweenSidesRestSeconds ?? 45
 );
 
 export const getRemainingRestSeconds = (timer: { status: "idle" | "running" | "paused"; startedAt?: string; durationSeconds: number; remainingSeconds?: number }) => {

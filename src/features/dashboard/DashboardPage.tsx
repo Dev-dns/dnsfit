@@ -15,6 +15,8 @@ export function DashboardPage() {
     progressRepository.getSummary("week").then(setSummary);
   }, []);
 
+  const plannedMapMuscles = summary?.muscles.map((muscle) => ({ ...muscle, effectiveSets: muscle.plannedSets })) ?? [];
+
   return (
     <div className="space-y-5">
       <Card className="relative overflow-hidden">
@@ -23,7 +25,7 @@ export function DashboardPage() {
           <Badge tone="danger">Phase 3</Badge>
           <h2 className="mt-4 text-4xl font-black leading-none tracking-[-0.06em]">Semana de entrenamiento.</h2>
           <p className="mt-4 text-sm leading-6 text-muted">
-            Resumen local de entrenos completados, volumen directo y musculos trabajados esta semana.
+            Resumen local de entrenos completados, volumen directo planificado y musculos de la semana.
           </p>
           <div className="mt-6 grid grid-cols-2 gap-3">
             <Button onClick={() => { window.location.hash = "training"; }}>Entreno activo</Button>
@@ -34,8 +36,8 @@ export function DashboardPage() {
       <div className="grid grid-cols-2 gap-3">
         <Metric label="Sesiones" value={summary?.workoutsCount ?? 0} />
         <Metric label="Duracion" value={summary ? formatHours(summary.totalDurationSeconds) : "0h 0m"} />
-        <Metric label="Sets efectivos" value={summary?.effectiveSets ?? 0} />
-        <Metric label="Volumen" value={`${Math.round(summary?.volumeKg ?? 0)} kg`} />
+        <Metric label="Sets hechos" value={summary?.effectiveSets ?? 0} />
+        <Metric label="Sets plan" value={summary?.plannedSets ?? 0} />
       </div>
       <Card>
         <div className="mb-4 flex items-center justify-between gap-4">
@@ -45,18 +47,18 @@ export function DashboardPage() {
           </div>
           <Button variant="ghost" className="min-h-0 px-3 py-2 text-xs" onClick={() => { window.location.hash = "progress"; }}>Ver progreso</Button>
         </div>
-        <MuscleMap muscles={summary?.muscles ?? []} />
+        <MuscleMap muscles={plannedMapMuscles} />
       </Card>
       <Card>
-        <h3 className="text-xl font-black tracking-[-0.04em]">Musculos trabajados</h3>
+        <h3 className="text-xl font-black tracking-[-0.04em]">Volumen planificado</h3>
         <div className="mt-4 space-y-3">
-          {(summary?.muscles.length ? summary.muscles.slice(0, 5) : []).map((muscle) => (
+          {(summary?.muscles.length ? summary.muscles.filter((muscle) => muscle.plannedSets > 0).slice(0, 5) : []).map((muscle) => (
             <div key={muscle.muscleId} className="flex items-center justify-between rounded-2xl border border-line bg-ink px-4 py-3">
               <span className="text-sm font-bold">{muscle.muscleName}</span>
-              <span className="font-mono text-xs text-danger">{muscle.effectiveSets} sets · {Math.round(muscle.volumeKg)} kg</span>
+              <span className="font-mono text-xs text-danger">{muscle.plannedSets} plan · {muscle.effectiveSets} hechos</span>
             </div>
           ))}
-          {summary && summary.muscles.length === 0 ? <p className="text-sm text-muted">Completa un entreno para ver volumen directo semanal.</p> : null}
+          {summary && summary.muscles.every((muscle) => muscle.plannedSets === 0) ? <p className="text-sm text-muted">Crea rutinas activas para ver el volumen directo planificado.</p> : null}
         </div>
       </Card>
     </div>

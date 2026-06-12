@@ -1,10 +1,31 @@
 import { createId, nowIso } from "../../domain/shared/entity";
-import { getRestSecondsBetweenExercises, getRestSecondsForSet } from "../../domain/restTimer/restTimerRules";
+import { getRestSecondsBetweenExercises, getRestSecondsBetweenUnilateralSides, getRestSecondsForSet } from "../../domain/restTimer/restTimerRules";
 import type { Workout, WorkoutExercise, WorkoutSet, WorkoutSetType } from "../../domain/workouts/workoutTypes";
 import { calculateBackOffWeight } from "../../domain/workouts/backOff";
 import { calculateWarmupWeight } from "../../domain/workouts/warmups";
 import { calculateKgVolume, isEffectiveSet } from "../../domain/volume/volumeCalculations";
 import { db } from "../db";
+
+const getBestCompletedWeightByExercise = async (exerciseIds: string[]) => {
+  const completedWorkoutIds = new Set((await db.workouts.where("status").equals("completed").toArray()).map((workout) => workout.id));
+  const exerciseIdSet = new Set(exerciseIds);
+  const bestWeights: Record<string, number | undefined> = {};
+  const sets = await db.workoutSets.toArray();
+
+  for (const set of sets) {
+    if (!completedWorkoutIds.has(set.workoutId) || !exerciseIdSet.has(set.exerciseId) || !set.isCompleted || typeof set.weight !== "number") continue;
+    const currentBest = bestWeights[set.exerciseId];
+    if (currentBest === undefined || set.weight > currentBest) bestWeights[set.exerciseId] = set.weight;
+  }
+
+  const exercises = await db.exercises.bulkGet(exerciseIds);
+  for (const exercise of exercises) {
+    if (!exercise || bestWeights[exercise.id] !== undefined) continue;
+    bestWeights[exercise.id] = exercise.manualPerformance?.maxSet?.weightKg ?? exercise.manualPerformance?.prWeightKg;
+  }
+
+  return bestWeights;
+};
 
 const getSetTypes = (structureType: "normal" | "top_set_back_off", targetSets: number, topSets = 1, backOffSets = 0): WorkoutSetType[] => {
   if (structureType === "normal") {
@@ -45,6 +66,19 @@ const findPreviousSet = async (exerciseId: string, routineDayId: string | undefi
     if (reference) return { set: reference, workout };
   }
 
+  const exercise = await db.exercises.get(exerciseId);
+  const manualSet = exercise?.manualPerformance?.maxSet;
+  if (manualSet?.weightKg || manualSet?.reps || manualSet?.rir) {
+    return {
+      set: {
+        weight: manualSet.weightKg,
+        reps: manualSet.reps,
+        rir: manualSet.rir
+      },
+      label: "PR manual"
+    };
+  }
+
   return undefined;
 };
 
@@ -63,8 +97,9 @@ export const workoutRepository = {
     const exercises = await db.exercises.bulkGet(workoutExercises.map((entry) => entry.exerciseId));
     const routineExercises = await db.routineExercises.bulkGet(workoutExercises.map((entry) => entry.routineExerciseId ?? ""));
     const restTimer = await db.restTimers.where("workoutId").equals(workout.id).first();
+    const bestWeightsByExercise = await getBestCompletedWeightByExercise(workoutExercises.map((entry) => entry.exerciseId));
 
-    return { workout, workoutExercises, sets, exercises, routineExercises, restTimer };
+    return { workout, workoutExercises, sets, exercises, routineExercises, restTimer, bestWeightsByExercise };
   },
   startFromRoutineDay: async (routineDayId: string) => {
     const active = await db.workouts.where("status").equals("active").first();
@@ -112,6 +147,11 @@ export const workoutRepository = {
         for (const [setIndex, setType] of setTypes.entries()) {
           const isWorkingSet = setType !== "warmup";
           const previous = await findPreviousSet(routineExercise.exerciseId, routineDayId, setIndex + 1, setType);
+          const previousWorkoutDate = previous?.workout?.startedAt;
+          const previousReferenceLabel = previous?.label;
+          const suggestedWarmupWeight = setType === "warmup" && routineExercise.plannedTopSetWeight && routineExercise.warmupWeightMultipliers?.[setIndex]
+            ? calculateWarmupWeight(routineExercise.plannedTopSetWeight, routineExercise.warmupWeightMultipliers[setIndex])
+            : undefined;
           await db.workoutSets.add({
             id: createId(),
             workoutId,
@@ -120,12 +160,17 @@ export const workoutRepository = {
             order: setIndex + 1,
             setType,
             targetRir: isWorkingSet ? routineExercise.targetRirs?.[workingSetIndex] : undefined,
+            targetReps: setType === "warmup" ? routineExercise.warmupTargetReps?.[setIndex] : undefined,
+            plannedRestSeconds: setType === "warmup" ? routineExercise.warmupRestSeconds?.[setIndex] : undefined,
             isCompleted: false,
             suggestedWeightMultiplier: setType === "warmup" ? routineExercise.warmupWeightMultipliers?.[setIndex] : undefined,
+            suggestedWeight: suggestedWarmupWeight,
+            weight: suggestedWarmupWeight,
             previousWeight: previous?.set.weight,
             previousReps: previous?.set.reps,
             previousRir: previous?.set.rir,
-            previousWorkoutDate: previous?.workout.startedAt,
+            previousWorkoutDate,
+            previousReferenceLabel,
             createdAt: now,
             updatedAt: now
           });
@@ -151,7 +196,7 @@ export const workoutRepository = {
         updatedAt: nowIso()
       });
 
-      if ((current.setType === "top_set" || current.setType === "normal") && typeof next.weight === "number") {
+      if ((current.setType === "top_set" || current.setType === "normal" || current.setType === "back_off") && typeof next.weight === "number") {
         const workoutExercise = await db.workoutExercises.get(current.workoutExerciseId);
         const routineExercise = workoutExercise?.routineExerciseId ? await db.routineExercises.get(workoutExercise.routineExerciseId) : undefined;
         const workoutSets = await db.workoutSets.where("workoutExerciseId").equals(current.workoutExerciseId).sortBy("order");
@@ -174,16 +219,20 @@ export const workoutRepository = {
           }
 
           const backOffSets = workoutSets.filter((set) => set.setType === "back_off");
+          const currentBackOffIndex = current.setType === "back_off" ? backOffSets.findIndex((set) => set.id === current.id) : -1;
+          let baseWeight = next.weight;
 
           for (const [backOffIndex, backOffSet] of backOffSets.sort((a, b) => a.order - b.order).entries()) {
+            if (current.setType === "back_off" && backOffIndex <= currentBackOffIndex) continue;
             const reductionPercent = getBackOffReductionPercent(routineExercise.backOffReductionPercents, routineExercise.backOffReductionPercent, backOffIndex);
-            const suggestedWeight = calculateBackOffWeight(next.weight, reductionPercent);
+            const suggestedWeight = calculateBackOffWeight(baseWeight, reductionPercent);
             const shouldUpdateWeight = backOffSet.weight === undefined || backOffSet.weight === backOffSet.suggestedWeight;
             await db.workoutSets.update(backOffSet.id, {
               suggestedWeight,
               weight: shouldUpdateWeight ? suggestedWeight : backOffSet.weight,
               updatedAt: nowIso()
             });
+            baseWeight = shouldUpdateWeight ? suggestedWeight : (backOffSet.weight ?? suggestedWeight);
           }
         }
       }
@@ -242,6 +291,43 @@ export const workoutRepository = {
       createdAt: now,
       updatedAt: now
     });
+  },
+  startRestTimerBetweenSides: async (setId: string) => {
+    const set = await db.workoutSets.get(setId);
+    if (!set) return;
+
+    const workoutExercise = await db.workoutExercises.get(set.workoutExerciseId);
+    const routineExercise = workoutExercise?.routineExerciseId ? await db.routineExercises.get(workoutExercise.routineExerciseId) : undefined;
+    const durationSeconds = getRestSecondsBetweenUnilateralSides(routineExercise);
+    const now = nowIso();
+    await db.restTimers.put({
+      id: set.workoutId,
+      workoutId: set.workoutId,
+      durationSeconds,
+      startedAt: now,
+      status: "running",
+      createdAt: now,
+      updatedAt: now
+    });
+  },
+  updateWarmupSuggestionsFromTopWeight: async (workoutExerciseId: string, topSetWeight: number) => {
+    if (!Number.isFinite(topSetWeight) || topSetWeight <= 0) return;
+    const workoutExercise = await db.workoutExercises.get(workoutExerciseId);
+    const routineExercise = workoutExercise?.routineExerciseId ? await db.routineExercises.get(workoutExercise.routineExerciseId) : undefined;
+    if (!routineExercise?.warmupWeightMultipliers?.length) return;
+
+    const warmupSets = (await db.workoutSets.where("workoutExerciseId").equals(workoutExerciseId).sortBy("order")).filter((set) => set.setType === "warmup");
+    for (const [warmupIndex, warmupSet] of warmupSets.entries()) {
+      const multiplier = routineExercise.warmupWeightMultipliers[warmupIndex] ?? warmupSet.suggestedWeightMultiplier;
+      if (!multiplier) continue;
+      const suggestedWeight = calculateWarmupWeight(topSetWeight, multiplier);
+      const shouldUpdateWeight = warmupSet.weight === undefined || warmupSet.weight === warmupSet.suggestedWeight;
+      await db.workoutSets.update(warmupSet.id, {
+        suggestedWeight,
+        weight: shouldUpdateWeight ? suggestedWeight : warmupSet.weight,
+        updatedAt: nowIso()
+      });
+    }
   },
   pauseRestTimer: async (workoutId: string, remainingSeconds: number) => {
     await db.restTimers.update(workoutId, { status: "paused", pausedAt: nowIso(), remainingSeconds, updatedAt: nowIso() });

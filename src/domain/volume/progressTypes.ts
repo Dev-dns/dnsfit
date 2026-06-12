@@ -6,7 +6,11 @@ export type MuscleVolumeSummary = {
   muscleId: MuscleGroupId;
   muscleName: string;
   effectiveSets: number;
+  plannedSets: number;
   volumeKg: number;
+  bestWeightKg?: number;
+  previousBestWeightKg?: number;
+  weightProgressKg?: number;
 };
 
 export type ProgressSummary = {
@@ -14,6 +18,7 @@ export type ProgressSummary = {
   workoutsCount: number;
   totalDurationSeconds: number;
   effectiveSets: number;
+  plannedSets: number;
   volumeKg: number;
   muscles: MuscleVolumeSummary[];
 };

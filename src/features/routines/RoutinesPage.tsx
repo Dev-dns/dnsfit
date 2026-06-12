@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type SetStateAction } from "react";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
@@ -12,7 +12,6 @@ import type { Exercise } from "../../domain/exercises/exerciseTypes";
 import { parseRestMinutesToSeconds } from "../../domain/restTimer/restTimeFormat";
 import type { Routine, RoutineDay, RoutineExercise } from "../../domain/routines/routineTypes";
 import { createId, nowIso } from "../../domain/shared/entity";
-import { parseWarmupMultipliers } from "../../domain/workouts/warmups";
 
 type RoutineDetail = {
   day: RoutineDay;
@@ -32,11 +31,16 @@ export function RoutinesPage() {
   const [restMinutes, setRestMinutes] = useState("3");
   const [backOffReductionPercent, setBackOffReductionPercent] = useState("10");
   const [backOffReductionPercents, setBackOffReductionPercents] = useState<string[]>(["10", "12.5"]);
+  const [plannedTopSetWeight, setPlannedTopSetWeight] = useState("");
   const [targetRirs, setTargetRirs] = useState<string[]>(["2", "2", "2"]);
   const [topSetRestMinutes, setTopSetRestMinutes] = useState("4");
   const [backOffRestMinutes, setBackOffRestMinutes] = useState("3");
   const [betweenExercisesRestMinutes, setBetweenExercisesRestMinutes] = useState("4");
-  const [warmupScheme, setWarmupScheme] = useState("");
+  const [unilateralBetweenSidesRestMinutes, setUnilateralBetweenSidesRestMinutes] = useState("0.45");
+  const [warmupCount, setWarmupCount] = useState("0");
+  const [warmupPercents, setWarmupPercents] = useState<string[]>(["0.5", "0.7", "0.8"]);
+  const [warmupReps, setWarmupReps] = useState<string[]>(["8", "5", "3"]);
+  const [warmupRestMinutes, setWarmupRestMinutes] = useState<string[]>(["1.30", "2", "2.30"]);
   const [structureType, setStructureType] = useState<"normal" | "top_set_back_off">("normal");
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
@@ -63,8 +67,10 @@ export function RoutinesPage() {
 
   const selectedRoutine = routines.find((routine) => routine.id === selectedRoutineId);
   const selectedDay = routineDetails.find((detail) => detail.day.id === selectedDayId)?.day;
+  const selectedExercise = exercises.find((exercise) => exercise.id === selectedExerciseId);
   const targetSetCount = Math.max(1, Number(targetSets) || 1);
   const backOffSetCount = structureType === "top_set_back_off" ? Math.max(1, (Number(targetSets) || 3) - 1) : 0;
+  const warmupSetCount = Math.max(0, Number(warmupCount) || 0);
 
   const getBackOffReductionPercents = () => Array.from({ length: backOffSetCount }, (_, index) => {
     const value = Number(backOffReductionPercents[index] ?? backOffReductionPercent);
@@ -93,6 +99,26 @@ export function RoutinesPage() {
       return next;
     });
   };
+
+  const updateWarmupField = (setter: (value: SetStateAction<string[]>) => void, index: number, value: string) => {
+    setter((current) => {
+      const next = [...current];
+      next[index] = value;
+      return next;
+    });
+  };
+
+  const getWarmupPercents = () => Array.from({ length: warmupSetCount }, (_, index) => {
+    const parsed = Number((warmupPercents[index] ?? "").replace(",", "."));
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0.5;
+  });
+
+  const getWarmupTargetReps = () => Array.from({ length: warmupSetCount }, (_, index) => {
+    const parsed = Number(warmupReps[index]);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+  });
+
+  const getWarmupRestSeconds = () => Array.from({ length: warmupSetCount }, (_, index) => parseRestMinutesToSeconds(warmupRestMinutes[index] ?? "2", 120));
 
   const createRoutine = async () => {
     if (!routineName.trim()) return;
@@ -142,12 +168,16 @@ export function RoutinesPage() {
       backOffSets: structureType === "top_set_back_off" ? backOffSetCount : undefined,
       backOffReductionPercent: structureType === "top_set_back_off" ? Math.max(0, Number(backOffReductionPercent) || 10) : undefined,
       backOffReductionPercents: structureType === "top_set_back_off" ? getBackOffReductionPercents() : undefined,
+      plannedTopSetWeight: Number(plannedTopSetWeight) > 0 ? Number(plannedTopSetWeight) : undefined,
       restSeconds: parseRestMinutesToSeconds(restMinutes, 180),
       targetRirs: getTargetRirs(),
-      warmupWeightMultipliers: parseWarmupMultipliers(warmupScheme),
+      warmupWeightMultipliers: getWarmupPercents(),
+      warmupTargetReps: getWarmupTargetReps(),
+      warmupRestSeconds: getWarmupRestSeconds(),
       topSetRestSeconds: structureType === "top_set_back_off" ? parseRestMinutesToSeconds(topSetRestMinutes, 240) : undefined,
       backOffRestSeconds: structureType === "top_set_back_off" ? parseRestMinutesToSeconds(backOffRestMinutes, 180) : undefined,
       betweenExercisesRestSeconds: parseRestMinutesToSeconds(betweenExercisesRestMinutes, 240),
+      unilateralBetweenSidesRestSeconds: selectedExercise?.isUnilateral ? parseRestMinutesToSeconds(unilateralBetweenSidesRestMinutes, 45) : undefined,
       createdAt: now,
       updatedAt: now
     });
@@ -258,7 +288,31 @@ export function RoutinesPage() {
                       <Input label="Descanso serie (min)" inputMode="decimal" value={restMinutes} onChange={(event) => setRestMinutes(event.target.value)} placeholder="3 o 3.30" />
                       <Input label="Descanso sig. ej (min)" inputMode="decimal" value={betweenExercisesRestMinutes} onChange={(event) => setBetweenExercisesRestMinutes(event.target.value)} placeholder="4 o 4.30" />
                     </div>
-                    <Input label="Aproximaciones" value={warmupScheme} onChange={(event) => setWarmupScheme(event.target.value)} placeholder="0.5, 0.7, 0.8" />
+                    {selectedExercise?.isUnilateral ? (
+                      <Input label="Descanso entre lados (min)" inputMode="decimal" value={unilateralBetweenSidesRestMinutes} onChange={(event) => setUnilateralBetweenSidesRestMinutes(event.target.value)} placeholder="0.45" />
+                    ) : null}
+                    <Input label="Peso top estimado" inputMode="decimal" value={plannedTopSetWeight} onChange={(event) => setPlannedTopSetWeight(event.target.value)} placeholder="100" />
+                    <div className="rounded-3xl border border-line bg-ink p-3">
+                      <div className="mb-3 flex items-center justify-between gap-3">
+                        <div>
+                          <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-muted">Aproximaciones</p>
+                          <p className="mt-1 text-xs text-muted">% del peso de top set, reps objetivo y descanso.</p>
+                        </div>
+                        <Input label="Series" className="w-20" type="number" min="0" value={warmupCount} onChange={(event) => setWarmupCount(event.target.value)} />
+                      </div>
+                      <div className="space-y-3">
+                        {Array.from({ length: warmupSetCount }, (_, index) => (
+                          <div key={index} className="rounded-2xl border border-line bg-panel p-3">
+                            <p className="mb-3 text-sm font-black">Aproximacion {index + 1}</p>
+                            <div className="grid grid-cols-3 gap-2">
+                              <Input label="% top" inputMode="decimal" value={warmupPercents[index] ?? ""} onChange={(event) => updateWarmupField(setWarmupPercents, index, event.target.value)} placeholder="0.7" />
+                              <Input label="Reps" inputMode="numeric" value={warmupReps[index] ?? ""} onChange={(event) => updateWarmupField(setWarmupReps, index, event.target.value)} placeholder="5" />
+                              <Input label="Rest" inputMode="decimal" value={warmupRestMinutes[index] ?? ""} onChange={(event) => updateWarmupField(setWarmupRestMinutes, index, event.target.value)} placeholder="2.30" />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                     <div className="rounded-3xl border border-line bg-ink p-3">
                       <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.24em] text-muted">RIR objetivo por serie</p>
                       <div className="grid grid-cols-3 gap-2">
@@ -312,7 +366,9 @@ export function RoutinesPage() {
               const rirSummary = routineExercise.targetRirs?.some((rir) => typeof rir === "number")
                 ? routineExercise.targetRirs.map((rir, rirIndex) => `S${rirIndex + 1}: ${typeof rir === "number" ? rir : "-"}`).join(" · ")
                 : "";
-              const warmupSummary = routineExercise.warmupWeightMultipliers?.length ? routineExercise.warmupWeightMultipliers.join(" / ") : "";
+              const warmupSummary = routineExercise.warmupWeightMultipliers?.length
+                ? routineExercise.warmupWeightMultipliers.map((percent, warmupIndex) => `${percent}x · ${routineExercise.warmupTargetReps?.[warmupIndex] ?? "-"} reps`).join(" / ")
+                : "";
               return (
                 <Card key={routineExercise.id} className="p-4">
                   <div className="flex items-start justify-between gap-4">
@@ -322,6 +378,8 @@ export function RoutinesPage() {
                         {routineExercise.targetSets} series · {routineExercise.structureType}
                         {reductionSummary ? ` · ${reductionSummary}` : ""}
                       </p>
+                      {routineExercise.plannedTopSetWeight ? <p className="mt-1 text-xs text-muted">Top estimado · {routineExercise.plannedTopSetWeight} kg</p> : null}
+                      {routineExercise.unilateralBetweenSidesRestSeconds ? <p className="mt-1 text-xs text-muted">Entre lados · {routineExercise.unilateralBetweenSidesRestSeconds}s</p> : null}
                       {rirSummary ? <p className="mt-1 text-xs text-muted">RIR objetivo · {rirSummary}</p> : null}
                       {warmupSummary ? <p className="mt-1 text-xs text-muted">Aproximaciones · {warmupSummary}</p> : null}
                     </div>

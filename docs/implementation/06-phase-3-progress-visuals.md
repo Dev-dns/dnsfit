@@ -10,6 +10,9 @@ Validation:
 
 Notes:
 - Progress derives from raw completed workouts, workout sets, exercises, and muscle groups.
+- 2026-06-12 update: direct muscle volume also includes planned effective sets from active routines; kg volume is no longer the primary progress metric.
+- 2026-06-12 update: weight progress compares best completed set weight in the selected range against the previous comparable range.
+- 2026-06-12 update: exercise PR/RM data can be calculated from completed sets and manually overridden from Datos > Ejercicios.
 - Muscle map uses `react-muscle-highlighter` through a local `MuscleMap` adapter.
 - dnsfit muscle IDs are mapped to the library body part slugs, still using direct volume only.
 - Dashboard now shows weekly summary and muscle map.
@@ -53,6 +56,8 @@ No new source-of-truth entities are required by default. Derive progress from:
 - Completed `WorkoutSet` records.
 - `WorkoutExercise` records.
 - `Exercise.primaryDirectMuscle`.
+- Optional manual `Exercise.manualPerformance` PR/RM overrides.
+- Active `Routine`, `RoutineDay`, and `RoutineExercise.targetSets` records for planned direct sets.
 - `MuscleGroup` seed data.
 
 Optional future cache:
@@ -78,6 +83,8 @@ Optional future cache:
 ## Domain Logic
 - `getCompletedSetsInRange(workouts, sets, range)`.
 - `calculateDirectVolumeByMuscle()`.
+- `calculatePlannedDirectSetsByMuscle()`.
+- `calculateBestWeightProgressByMuscle()`.
 - `calculateWorkoutSummary()`.
 - `calculateWeeklyTrainingStats()`.
 - `getMuscleIntensity(effectiveSets)`.

@@ -7,6 +7,7 @@ import { EmptyState } from "../../components/ui/EmptyState";
 import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
 import type { Exercise, ExerciseCategory, ExerciseType, EquipmentType } from "../../domain/exercises/exerciseTypes";
+import { rmTargets, type ExercisePerformanceSummary, type RmTarget } from "../../domain/exercises/performance";
 import type { MuscleGroup, MuscleGroupId } from "../../domain/muscles/muscleTypes";
 import { createId, nowIso } from "../../domain/shared/entity";
 import { getBackupFilename } from "../../domain/backup/backupValidation";
@@ -25,6 +26,11 @@ type ExerciseFormState = {
   exerciseType: ExerciseType;
   isUnilateral: boolean;
   notes: string;
+  manualMaxWeightKg: string;
+  manualMaxReps: string;
+  manualMaxRir: string;
+  manualPrWeightKg: string;
+  manualRms: Record<RmTarget, string>;
 };
 
 const defaultExerciseForm = (muscleId: MuscleGroupId): ExerciseFormState => ({
@@ -34,17 +40,56 @@ const defaultExerciseForm = (muscleId: MuscleGroupId): ExerciseFormState => ({
   equipmentType: "machine",
   exerciseType: "compound",
   isUnilateral: false,
-  notes: ""
+  notes: "",
+  manualMaxWeightKg: "",
+  manualMaxReps: "",
+  manualMaxRir: "",
+  manualPrWeightKg: "",
+  manualRms: { 1: "", 3: "", 5: "", 8: "", 10: "" }
 });
 
 const categories: ExerciseCategory[] = ["strength", "cardio", "mobility", "other"];
 const equipmentTypes: EquipmentType[] = ["barbell", "dumbbell", "machine", "cable", "bodyweight", "smith", "other"];
 const exerciseTypes: ExerciseType[] = ["compound", "isolation", "cardio", "core", "other"];
 
+const categoryLabels: Record<ExerciseCategory, string> = {
+  strength: "Fuerza",
+  cardio: "Cardio",
+  mobility: "Movilidad",
+  other: "Otro"
+};
+
+const equipmentLabels: Record<EquipmentType, string> = {
+  barbell: "Barra",
+  dumbbell: "Mancuernas",
+  machine: "Maquina",
+  cable: "Polea",
+  bodyweight: "Peso corporal",
+  smith: "Multipower",
+  other: "Otro"
+};
+
+const exerciseTypeLabels: Record<ExerciseType, string> = {
+  compound: "Multiarticular",
+  isolation: "Aislamiento",
+  cardio: "Cardio",
+  core: "Core",
+  other: "Otro"
+};
+
+const parseOptionalNumber = (value: string) => {
+  if (value.trim() === "") return undefined;
+  const parsed = Number(value.replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : undefined;
+};
+
+const formatOptionalNumber = (value: number | undefined) => value === undefined ? "" : String(value);
+
 export function MorePage() {
   const [activeTab, setActiveTab] = useState<MoreTab>("exercises");
   const [muscles, setMuscles] = useState<MuscleGroup[]>([]);
   const [exercises, setExercises] = useState<Exercise[]>([]);
+  const [performanceSummaries, setPerformanceSummaries] = useState<ExercisePerformanceSummary[]>([]);
   const [history, setHistory] = useState<Array<{ workout: { id: string; name: string; startedAt: string; durationSeconds?: number }; completedSets: number; volumeKg: number }>>([]);
   const [form, setForm] = useState<ExerciseFormState | null>(null);
   const [backupMessage, setBackupMessage] = useState<string | null>(null);
@@ -52,14 +97,16 @@ export function MorePage() {
   const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
 
   const refresh = async () => {
-    const [muscleData, exerciseData, historyData] = await Promise.all([
+    const [muscleData, exerciseData, historyData, performanceData] = await Promise.all([
       exerciseRepository.listMuscles(),
       exerciseRepository.listActive(),
-      workoutRepository.listHistory()
+      workoutRepository.listHistory(),
+      exerciseRepository.listPerformanceSummaries()
     ]);
     setMuscles(muscleData);
     setExercises(exerciseData);
     setHistory(historyData);
+    setPerformanceSummaries(performanceData);
     if (!form && muscleData[0]) setForm(defaultExerciseForm(muscleData[0].id));
   };
 
@@ -79,6 +126,15 @@ export function MorePage() {
       equipmentType: form.equipmentType,
       exerciseType: form.exerciseType,
       isUnilateral: form.isUnilateral,
+      manualPerformance: {
+        maxSet: {
+          weightKg: parseOptionalNumber(form.manualMaxWeightKg),
+          reps: parseOptionalNumber(form.manualMaxReps),
+          rir: parseOptionalNumber(form.manualMaxRir)
+        },
+        prWeightKg: parseOptionalNumber(form.manualPrWeightKg),
+        rms: Object.fromEntries(rmTargets.map((target) => [target, parseOptionalNumber(form.manualRms[target])]))
+      },
       notes: form.notes.trim() || undefined,
       visualAsset: { type: "none" },
       isArchived: false,
@@ -99,8 +155,24 @@ export function MorePage() {
       equipmentType: exercise.equipmentType,
       exerciseType: exercise.exerciseType,
       isUnilateral: exercise.isUnilateral,
-      notes: exercise.notes ?? ""
+      notes: exercise.notes ?? "",
+      manualMaxWeightKg: formatOptionalNumber(exercise.manualPerformance?.maxSet?.weightKg),
+      manualMaxReps: formatOptionalNumber(exercise.manualPerformance?.maxSet?.reps),
+      manualMaxRir: formatOptionalNumber(exercise.manualPerformance?.maxSet?.rir),
+      manualPrWeightKg: formatOptionalNumber(exercise.manualPerformance?.prWeightKg),
+      manualRms: {
+        1: formatOptionalNumber(exercise.manualPerformance?.rms?.[1]),
+        3: formatOptionalNumber(exercise.manualPerformance?.rms?.[3]),
+        5: formatOptionalNumber(exercise.manualPerformance?.rms?.[5]),
+        8: formatOptionalNumber(exercise.manualPerformance?.rms?.[8]),
+        10: formatOptionalNumber(exercise.manualPerformance?.rms?.[10])
+      }
     });
+  };
+
+  const updateManualRm = (target: RmTarget, value: string) => {
+    if (!form) return;
+    setForm({ ...form, manualRms: { ...form.manualRms, [target]: value } });
   };
 
   const exportBackup = async () => {
@@ -173,20 +245,43 @@ export function MorePage() {
               </Select>
               <div className="grid grid-cols-2 gap-3">
                 <Select label="Equipo" value={form.equipmentType} onChange={(event) => setForm({ ...form, equipmentType: event.target.value as EquipmentType })}>
-                  {equipmentTypes.map((value) => <option key={value} value={value}>{value}</option>)}
+                  {equipmentTypes.map((value) => <option key={value} value={value}>{equipmentLabels[value]}</option>)}
                 </Select>
                 <Select label="Tipo" value={form.exerciseType} onChange={(event) => setForm({ ...form, exerciseType: event.target.value as ExerciseType })}>
-                  {exerciseTypes.map((value) => <option key={value} value={value}>{value}</option>)}
+                  {exerciseTypes.map((value) => <option key={value} value={value}>{exerciseTypeLabels[value]}</option>)}
                 </Select>
               </div>
               <Select label="Categoria" value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value as ExerciseCategory })}>
-                {categories.map((value) => <option key={value} value={value}>{value}</option>)}
+                {categories.map((value) => <option key={value} value={value}>{categoryLabels[value]}</option>)}
               </Select>
               <label className="flex items-center gap-3 rounded-2xl border border-line bg-ink px-4 py-3 text-sm text-white">
                 <input type="checkbox" checked={form.isUnilateral} onChange={(event) => setForm({ ...form, isUnilateral: event.target.checked })} />
                 Unilateral
               </label>
               <Input label="Notas" value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} placeholder="Setup breve" />
+              <div className="rounded-3xl border border-line bg-ink p-3">
+                <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.24em] text-muted">PR manual</p>
+                <div className="grid grid-cols-3 gap-2">
+                  <Input label="Kg max" inputMode="decimal" value={form.manualMaxWeightKg} onChange={(event) => setForm({ ...form, manualMaxWeightKg: event.target.value })} placeholder="120" />
+                  <Input label="Reps" inputMode="numeric" value={form.manualMaxReps} onChange={(event) => setForm({ ...form, manualMaxReps: event.target.value })} placeholder="6" />
+                  <Input label="RIR" inputMode="numeric" value={form.manualMaxRir} onChange={(event) => setForm({ ...form, manualMaxRir: event.target.value })} placeholder="1" />
+                </div>
+                <details className="mt-3 rounded-2xl border border-line bg-panel p-3">
+                  <summary className="cursor-pointer text-xs font-bold text-muted">RMs manuales opcionales</summary>
+                  <Input className="mt-3" label="PR kg antiguo" inputMode="decimal" value={form.manualPrWeightKg} onChange={(event) => setForm({ ...form, manualPrWeightKg: event.target.value })} placeholder="Mejor peso" />
+                  <div className="mt-3 grid grid-cols-5 gap-2">
+                    {rmTargets.map((target) => (
+                      <Input
+                        key={target}
+                        label={`${target}RM`}
+                        inputMode="decimal"
+                        value={form.manualRms[target]}
+                        onChange={(event) => updateManualRm(target, event.target.value)}
+                      />
+                    ))}
+                  </div>
+                </details>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <Button onClick={saveExercise}>{form.id ? "Guardar" : "Crear"}</Button>
                 <Button variant="secondary" onClick={() => setForm(muscles[0] ? defaultExerciseForm(muscles[0].id) : null)}>Limpiar</Button>
@@ -196,12 +291,25 @@ export function MorePage() {
           <div className="space-y-2">
             {exercises.map((exercise) => {
               const muscle = muscles.find((item) => item.id === exercise.primaryDirectMuscle);
+              const performance = performanceSummaries.find((summary) => summary.exerciseId === exercise.id);
               return (
                 <Card key={exercise.id} className="p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <h3 className="font-bold text-white">{exercise.name}</h3>
-                      <p className="mt-1 text-xs text-muted">{muscle?.name ?? "Sin musculo"} · {exercise.equipmentType}</p>
+                      <p className="mt-1 text-xs text-muted">{muscle?.name ?? "Sin musculo"} · {equipmentLabels[exercise.equipmentType]} · {exerciseTypeLabels[exercise.exerciseType]}</p>
+                      <div className="mt-3 rounded-2xl border border-line bg-ink p-3">
+                        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted">PR / RMs</p>
+                        <p className="mt-2 text-xs text-muted">
+                          Auto {performance?.autoPrWeightKg ?? "-"} kg x {performance?.autoPrReps ?? "-"} @ {performance?.autoPrRir ?? "-"} · 1RM est. {performance?.autoEstimatedOneRmKg ?? "-"} kg
+                        </p>
+                        <p className="mt-1 text-xs text-muted">
+                          Manual {performance?.manualMaxSet?.weightKg ?? performance?.manualPrWeightKg ?? "-"} kg x {performance?.manualMaxSet?.reps ?? "-"} @ {performance?.manualMaxSet?.rir ?? "-"} · 1RM est. {performance?.manualEstimatedOneRmKg ?? "-"} kg
+                        </p>
+                        <p className="mt-1 text-xs text-muted">
+                          {rmTargets.map((target) => `${target}RM ${performance?.autoRms[target] ?? "-"}/${performance?.manualRms?.[target] ?? "-"}`).join(" · ")}
+                        </p>
+                      </div>
                     </div>
                     <div className="flex gap-2">
                       <Button variant="secondary" className="min-h-0 px-3 py-2 text-xs" onClick={() => editExercise(exercise)}>Editar</Button>

@@ -10,7 +10,12 @@ export const progressRepository = {
       db.exercises.toArray(),
       db.muscleGroups.toArray()
     ]);
+    const [routines, routineDays, routineExercises] = await Promise.all([
+      db.routines.toArray(),
+      db.routineDays.toArray(),
+      db.routineExercises.toArray()
+    ]);
 
-    return calculateProgressSummary(range, workouts, sets, exercises, muscleGroups);
+    return calculateProgressSummary(range, workouts, sets, exercises, muscleGroups, routines, routineDays, routineExercises);
   }
 };

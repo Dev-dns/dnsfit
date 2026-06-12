@@ -30,6 +30,7 @@ export type WorkoutSet = EntityBase & {
   setType: WorkoutSetType;
   weight?: number;
   reps?: number;
+  targetReps?: number;
   rir?: number;
   targetRir?: number;
   isCompleted: boolean;
@@ -37,8 +38,10 @@ export type WorkoutSet = EntityBase & {
   previousReps?: number;
   previousRir?: number;
   previousWorkoutDate?: string;
+  previousReferenceLabel?: string;
   suggestedWeight?: number;
   suggestedWeightMultiplier?: number;
+  plannedRestSeconds?: number;
   notes?: string;
   completedAt?: string;
 };

@@ -20,14 +20,15 @@ export function ProgressPage() {
     progressRepository.getSummary(range).then(setSummary);
   }, [range]);
 
-  const maxSets = Math.max(1, ...(summary?.muscles.map((muscle) => muscle.effectiveSets) ?? [0]));
+  const maxSets = Math.max(1, ...(summary?.muscles.map((muscle) => Math.max(muscle.effectiveSets, muscle.plannedSets)) ?? [0]));
+  const mapMuscles = summary?.muscles.map((muscle) => ({ ...muscle, effectiveSets: muscle.plannedSets })) ?? [];
 
   return (
     <div className="space-y-4">
       <Card>
         <Badge tone="danger">Progreso</Badge>
         <h2 className="mt-4 text-3xl font-black tracking-[-0.05em]">Volumen directo.</h2>
-        <p className="mt-3 text-sm leading-6 text-muted">Solo cuenta trabajo directo: normal, top set, back off y dropset completados.</p>
+        <p className="mt-3 text-sm leading-6 text-muted">Cuenta series directas por musculo: completadas en entrenos y planificadas en rutinas activas. El progreso mira avances de peso por semana/rango.</p>
       </Card>
 
       <div className="grid grid-cols-4 gap-2 rounded-3xl border border-line bg-panel p-1">
@@ -45,12 +46,12 @@ export function ProgressPage() {
 
       <div className="grid grid-cols-3 gap-3">
         <Stat label="Entrenos" value={summary?.workoutsCount ?? 0} />
-        <Stat label="Sets" value={summary?.effectiveSets ?? 0} />
-        <Stat label="Kg" value={Math.round(summary?.volumeKg ?? 0)} />
+        <Stat label="Sets hechos" value={summary?.effectiveSets ?? 0} />
+        <Stat label="Sets plan" value={summary?.plannedSets ?? 0} />
       </div>
 
       <Card>
-        <MuscleMap muscles={summary?.muscles ?? []} />
+        <MuscleMap muscles={mapMuscles} />
       </Card>
 
       <Card>
@@ -60,10 +61,16 @@ export function ProgressPage() {
             <div key={muscle.muscleId}>
               <div className="mb-2 flex items-center justify-between text-sm">
                 <span className="font-bold text-white">{muscle.muscleName}</span>
-                <span className="font-mono text-xs text-muted">{muscle.effectiveSets} sets · {Math.round(muscle.volumeKg)} kg</span>
+                <span className="font-mono text-xs text-muted">{muscle.effectiveSets}/{muscle.plannedSets} sets</span>
+              </div>
+              <div className="mb-2 flex items-center justify-between text-xs text-muted">
+                <span>Mejor peso {muscle.bestWeightKg ?? "-"} kg</span>
+                <span className={typeof muscle.weightProgressKg === "number" && muscle.weightProgressKg > 0 ? "text-danger" : "text-muted"}>
+                  {typeof muscle.weightProgressKg === "number" ? `${muscle.weightProgressKg >= 0 ? "+" : ""}${muscle.weightProgressKg} kg` : "Sin comparativa"}
+                </span>
               </div>
               <div className="h-3 overflow-hidden rounded-full bg-line">
-                <div className="h-full rounded-full bg-danger" style={{ width: `${Math.max(8, (muscle.effectiveSets / maxSets) * 100)}%` }} />
+                <div className="h-full rounded-full bg-danger" style={{ width: `${Math.max(8, (Math.max(muscle.effectiveSets, muscle.plannedSets) / maxSets) * 100)}%` }} />
               </div>
             </div>
           ))}
