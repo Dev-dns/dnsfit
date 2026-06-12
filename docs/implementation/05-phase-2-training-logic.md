@@ -64,6 +64,7 @@ Use `RoutineExercise` fields:
 - `targetReps`
 - `targetRepRanges`
 - `targetRirs`
+- `targetToFailure`
 - `warmupWeightMultipliers`
 - `warmupTargetReps`
 - `warmupRestSeconds`
@@ -81,6 +82,8 @@ Use `WorkoutSet` fields:
 - `previousWorkoutDate`
 - `previousReferenceLabel`
 - `targetRir`
+- `targetToFailure`
+- `wentToFailure`
 - `targetReps`
 - `suggestedWeight`
 - `suggestedWeightMultiplier`

@@ -35,6 +35,8 @@ export type WorkoutSet = EntityBase & {
   targetRepsMax?: number;
   rir?: number;
   targetRir?: number;
+  targetToFailure?: boolean;
+  wentToFailure?: boolean;
   isCompleted: boolean;
   previousWeight?: number;
   previousReps?: number;

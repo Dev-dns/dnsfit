@@ -36,6 +36,7 @@ export type RoutineExercise = EntityBase & {
   targetReps?: Array<number | undefined>;
   targetRepRanges?: Array<{ min?: number; max?: number }>;
   targetRirs?: Array<number | undefined>;
+  targetToFailure?: boolean[];
   warmupWeightMultipliers?: number[];
   warmupTargetReps?: Array<number | undefined>;
   warmupRestSeconds?: Array<number | undefined>;

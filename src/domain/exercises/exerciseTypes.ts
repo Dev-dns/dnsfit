@@ -19,6 +19,7 @@ export type ExerciseManualPerformance = {
     weightKg?: number;
     reps?: number;
     rir?: number;
+    toFailure?: boolean;
   };
   prWeightKg?: number;
   rms?: Partial<Record<1 | 3 | 5 | 8 | 10, number>>;

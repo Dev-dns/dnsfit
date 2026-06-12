@@ -59,6 +59,9 @@ const formatRoutineExerciseDetails = (routineExercise: RoutineExercise | undefin
   if (routineExercise.targetRirs?.some((rir) => typeof rir === "number")) {
     details.push(`RIR obj ${routineExercise.targetRirs.map((rir, index) => `S${index + 1}:${typeof rir === "number" ? rir : "-"}`).join(" ")}`);
   }
+  if (routineExercise.targetToFailure?.some(Boolean)) {
+    details.push(`Fallo obj ${routineExercise.targetToFailure.map((toFailure, index) => toFailure ? `S${index + 1}` : undefined).filter(Boolean).join(" ")}`);
+  }
   if (routineExercise.targetReps?.some((reps) => typeof reps === "number")) {
     details.push(`Reps obj ${routineExercise.targetReps.map((reps, index) => `S${index + 1}:${typeof reps === "number" ? reps : "-"}`).join(" ")}`);
   }
@@ -342,7 +345,7 @@ export function TrainingPage() {
                     <div>
                       <p className="text-sm font-black">Serie {set.order}</p>
                       <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted">
-                        {set.setType}{typeof set.targetRepsMin === "number" || typeof set.targetRepsMax === "number" ? ` · obj ${set.targetRepsMin ?? "-"}-${set.targetRepsMax ?? "-"} reps` : typeof set.targetReps === "number" ? ` · obj ${set.targetReps} reps` : ""}{typeof set.targetRir === "number" ? ` · RIR ${set.targetRir}` : ""}
+                        {set.setType}{typeof set.targetRepsMin === "number" || typeof set.targetRepsMax === "number" ? ` · obj ${set.targetRepsMin ?? "-"}-${set.targetRepsMax ?? "-"} reps` : typeof set.targetReps === "number" ? ` · obj ${set.targetReps} reps` : ""}{set.targetToFailure ? " · fallo" : typeof set.targetRir === "number" ? ` · RIR ${set.targetRir}` : ""}
                       </p>
                       {set.suggestedWeightMultiplier ? (
                         <p className="mt-1 text-xs text-muted">
@@ -386,7 +389,7 @@ export function TrainingPage() {
                       onChange={(event) => updateSet(set.id, { rir: parseOptionalNumber(event.target.value) })}
                     />
                   </div>
-                  <Button variant={set.rir === 0 ? "primary" : "secondary"} className="mt-2 w-full min-h-0 px-3 py-2 text-xs" onClick={() => updateSet(set.id, { rir: 0 })}>Fallo</Button>
+                  <Button variant={set.wentToFailure || set.rir === 0 ? "primary" : "secondary"} className="mt-2 w-full min-h-0 px-3 py-2 text-xs" onClick={() => updateSet(set.id, { rir: 0, wentToFailure: true })}>Fallo</Button>
                 </div>
               ))}
             </div>

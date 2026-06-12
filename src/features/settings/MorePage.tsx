@@ -29,6 +29,7 @@ type ExerciseFormState = {
   manualMaxWeightKg: string;
   manualMaxReps: string;
   manualMaxRir: string;
+  manualMaxToFailure: boolean;
   manualPrWeightKg: string;
   manualRms: Record<RmTarget, string>;
 };
@@ -44,6 +45,7 @@ const defaultExerciseForm = (muscleId: MuscleGroupId): ExerciseFormState => ({
   manualMaxWeightKg: "",
   manualMaxReps: "",
   manualMaxRir: "",
+  manualMaxToFailure: false,
   manualPrWeightKg: "",
   manualRms: { 1: "", 3: "", 5: "", 8: "", 10: "" }
 });
@@ -130,7 +132,8 @@ export function MorePage() {
         maxSet: {
           weightKg: parseOptionalNumber(form.manualMaxWeightKg),
           reps: parseOptionalNumber(form.manualMaxReps),
-          rir: parseOptionalNumber(form.manualMaxRir)
+          rir: parseOptionalNumber(form.manualMaxRir),
+          toFailure: form.manualMaxToFailure
         },
         prWeightKg: parseOptionalNumber(form.manualPrWeightKg),
         rms: Object.fromEntries(rmTargets.map((target) => [target, parseOptionalNumber(form.manualRms[target])]))
@@ -159,6 +162,7 @@ export function MorePage() {
       manualMaxWeightKg: formatOptionalNumber(exercise.manualPerformance?.maxSet?.weightKg),
       manualMaxReps: formatOptionalNumber(exercise.manualPerformance?.maxSet?.reps),
       manualMaxRir: formatOptionalNumber(exercise.manualPerformance?.maxSet?.rir),
+      manualMaxToFailure: Boolean(exercise.manualPerformance?.maxSet?.toFailure),
       manualPrWeightKg: formatOptionalNumber(exercise.manualPerformance?.prWeightKg),
       manualRms: {
         1: formatOptionalNumber(exercise.manualPerformance?.rms?.[1]),
@@ -266,6 +270,10 @@ export function MorePage() {
                   <Input label="Reps" inputMode="numeric" value={form.manualMaxReps} onChange={(event) => setForm({ ...form, manualMaxReps: event.target.value })} placeholder="6" />
                   <Input label="RIR" inputMode="numeric" value={form.manualMaxRir} onChange={(event) => setForm({ ...form, manualMaxRir: event.target.value })} placeholder="1" />
                 </div>
+                <label className="mt-3 flex items-center gap-3 rounded-2xl border border-line bg-panel px-3 py-2 text-xs font-bold text-white">
+                  <input type="checkbox" checked={form.manualMaxToFailure} onChange={(event) => setForm({ ...form, manualMaxToFailure: event.target.checked, manualMaxRir: event.target.checked ? "0" : form.manualMaxRir })} />
+                  Ese PR fue al fallo
+                </label>
                 <details className="mt-3 rounded-2xl border border-line bg-panel p-3">
                   <summary className="cursor-pointer text-xs font-bold text-muted">RMs manuales opcionales</summary>
                   <Input className="mt-3" label="PR kg antiguo" inputMode="decimal" value={form.manualPrWeightKg} onChange={(event) => setForm({ ...form, manualPrWeightKg: event.target.value })} placeholder="Mejor peso" />
@@ -304,7 +312,7 @@ export function MorePage() {
                           Auto {performance?.autoPrWeightKg ?? "-"} kg x {performance?.autoPrReps ?? "-"} @ {performance?.autoPrRir ?? "-"} · 1RM est. {performance?.autoEstimatedOneRmKg ?? "-"} kg
                         </p>
                         <p className="mt-1 text-xs text-muted">
-                          Manual {performance?.manualMaxSet?.weightKg ?? performance?.manualPrWeightKg ?? "-"} kg x {performance?.manualMaxSet?.reps ?? "-"} @ {performance?.manualMaxSet?.rir ?? "-"} · 1RM est. {performance?.manualEstimatedOneRmKg ?? "-"} kg
+                          Manual {performance?.manualMaxSet?.weightKg ?? performance?.manualPrWeightKg ?? "-"} kg x {performance?.manualMaxSet?.reps ?? "-"} @ {performance?.manualMaxSet?.toFailure ? "fallo" : performance?.manualMaxSet?.rir ?? "-"} · 1RM est. {performance?.manualEstimatedOneRmKg ?? "-"} kg
                         </p>
                         <p className="mt-1 text-xs text-muted">
                           {rmTargets.map((target) => `${target}RM ${performance?.autoRms[target] ?? "-"}/${performance?.manualRms?.[target] ?? "-"}`).join(" · ")}

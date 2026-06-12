@@ -36,6 +36,7 @@ export function RoutinesPage() {
   const [targetRepsMin, setTargetRepsMin] = useState<string[]>(["8", "8", "8"]);
   const [targetRepsMax, setTargetRepsMax] = useState<string[]>(["10", "10", "10"]);
   const [targetRirs, setTargetRirs] = useState<string[]>(["2", "2", "2"]);
+  const [targetToFailure, setTargetToFailure] = useState<boolean[]>([false, false, false]);
   const [topSetRestMinutes, setTopSetRestMinutes] = useState("4");
   const [backOffRestMinutes, setBackOffRestMinutes] = useState("3");
   const [betweenExercisesRestMinutes, setBetweenExercisesRestMinutes] = useState("4");
@@ -130,6 +131,14 @@ export function RoutinesPage() {
     });
   };
 
+  const updateTargetToFailure = (index: number, value: boolean) => {
+    setTargetToFailure((current) => {
+      const next = [...current];
+      next[index] = value;
+      return next;
+    });
+  };
+
   const updateWarmupField = (setter: (value: SetStateAction<string[]>) => void, index: number, value: string) => {
     setter((current) => {
       const next = [...current];
@@ -160,6 +169,7 @@ export function RoutinesPage() {
     setTargetRepsMin(["8", "8", "8"]);
     setTargetRepsMax(["10", "10", "10"]);
     setTargetRirs(["2", "2", "2"]);
+    setTargetToFailure([false, false, false]);
     setTopSetRestMinutes("4");
     setBackOffRestMinutes("3");
     setBetweenExercisesRestMinutes("4");
@@ -183,6 +193,7 @@ export function RoutinesPage() {
     setTargetRepsMin((routineExercise.targetRepRanges?.length ? routineExercise.targetRepRanges.map((range) => range.min) : (routineExercise.targetReps?.map((reps) => reps) ?? [])).map((value) => value === undefined ? "" : String(value)));
     setTargetRepsMax((routineExercise.targetRepRanges?.length ? routineExercise.targetRepRanges.map((range) => range.max) : (routineExercise.targetReps?.map((reps) => reps) ?? [])).map((value) => value === undefined ? "" : String(value)));
     setTargetRirs((routineExercise.targetRirs?.length ? routineExercise.targetRirs : []).map((value) => value === undefined ? "" : String(value)));
+    setTargetToFailure(routineExercise.targetToFailure ?? []);
     setTopSetRestMinutes(formatSecondsAsRestMinutes(routineExercise.topSetRestSeconds ?? 240));
     setBackOffRestMinutes(formatSecondsAsRestMinutes(routineExercise.backOffRestSeconds ?? 180));
     setBetweenExercisesRestMinutes(formatSecondsAsRestMinutes(routineExercise.betweenExercisesRestSeconds ?? 240));
@@ -249,6 +260,7 @@ export function RoutinesPage() {
       restSeconds: parseRestMinutesToSeconds(restMinutes, 180),
       targetRepRanges: getTargetRepRanges(),
       targetRirs: getTargetRirs(),
+      targetToFailure: Array.from({ length: targetSetCount }, (_, index) => Boolean(targetToFailure[index])),
       warmupWeightMultipliers: getWarmupPercents(),
       warmupTargetReps: getWarmupTargetReps(),
       warmupRestSeconds: getWarmupRestSeconds(),
@@ -396,27 +408,34 @@ export function RoutinesPage() {
                       <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.24em] text-muted">Objetivo por serie</p>
                       <div className="space-y-3">
                         {Array.from({ length: targetSetCount }, (_, index) => (
-                          <div key={index} className="grid grid-cols-3 gap-2 rounded-2xl border border-line bg-panel p-3">
+                          <div key={index} className="rounded-2xl border border-line bg-panel p-3">
+                            <p className="mb-3 text-sm font-black">Serie {index + 1}</p>
+                            <div className="grid grid-cols-3 gap-2">
                             <Input
-                              label={`S${index + 1} min`}
+                              label="Min"
                               inputMode="numeric"
                               value={targetRepsMin[index] ?? ""}
                               onChange={(event) => updateTargetRepMin(index, event.target.value)}
                             />
                             <Input
-                              label={`S${index + 1} max`}
+                              label="Max"
                               inputMode="numeric"
                               value={targetRepsMax[index] ?? ""}
                               onChange={(event) => updateTargetRepMax(index, event.target.value)}
                             />
                             <Input
-                              label={`S${index + 1} RIR`}
+                              label="RIR"
                               type="number"
                               min="0"
                               step="0.5"
                               value={targetRirs[index] ?? ""}
                               onChange={(event) => updateTargetRir(index, event.target.value)}
                             />
+                            </div>
+                            <label className="mt-3 flex items-center gap-3 rounded-2xl border border-line bg-ink px-3 py-2 text-xs font-bold text-white">
+                              <input type="checkbox" checked={Boolean(targetToFailure[index])} onChange={(event) => updateTargetToFailure(index, event.target.checked)} />
+                              Objetivo al fallo
+                            </label>
                           </div>
                         ))}
                       </div>
@@ -461,6 +480,9 @@ export function RoutinesPage() {
               const rirSummary = routineExercise.targetRirs?.some((rir) => typeof rir === "number")
                 ? routineExercise.targetRirs.map((rir, rirIndex) => `S${rirIndex + 1}: ${typeof rir === "number" ? rir : "-"}`).join(" · ")
                 : "";
+              const failureSummary = routineExercise.targetToFailure?.some(Boolean)
+                ? routineExercise.targetToFailure.map((toFailure, failureIndex) => toFailure ? `S${failureIndex + 1}` : undefined).filter(Boolean).join(" · ")
+                : "";
               const repsSummary = routineExercise.targetRepRanges?.some((range) => typeof range.min === "number" || typeof range.max === "number")
                 ? routineExercise.targetRepRanges.map((range, repsIndex) => `S${repsIndex + 1}: ${range.min ?? "-"}-${range.max ?? "-"}`).join(" · ")
                 : routineExercise.targetReps?.some((reps) => typeof reps === "number")
@@ -482,6 +504,7 @@ export function RoutinesPage() {
                       {routineExercise.unilateralBetweenSidesRestSeconds ? <p className="mt-1 text-xs text-muted">Entre lados · {routineExercise.unilateralBetweenSidesRestSeconds}s</p> : null}
                       {repsSummary ? <p className="mt-1 text-xs text-muted">Reps objetivo · {repsSummary}</p> : null}
                       {rirSummary ? <p className="mt-1 text-xs text-muted">RIR objetivo · {rirSummary}</p> : null}
+                      {failureSummary ? <p className="mt-1 text-xs text-muted">Al fallo · {failureSummary}</p> : null}
                       {warmupSummary ? <p className="mt-1 text-xs text-muted">Aproximaciones · {warmupSummary}</p> : null}
                     </div>
                     <div className="grid gap-1">

@@ -16,6 +16,7 @@ export type ExercisePerformanceSummary = {
     weightKg?: number;
     reps?: number;
     rir?: number;
+    toFailure?: boolean;
   };
   manualEstimatedOneRmKg?: number;
   manualPrWeightKg?: number;

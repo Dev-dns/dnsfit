@@ -28,6 +28,7 @@ type Exercise = {
       weightKg?: number;
       reps?: number;
       rir?: number;
+      toFailure?: boolean;
     };
     prWeightKg?: number;
     rms?: Partial<Record<1 | 3 | 5 | 8 | 10, number>>;
@@ -120,6 +121,7 @@ type RoutineExercise = EntityBase & {
   targetReps?: Array<number | undefined>;
   targetRepRanges?: Array<{ min?: number; max?: number }>;
   targetRirs?: Array<number | undefined>;
+  targetToFailure?: boolean[];
   warmupWeightMultipliers?: number[];
   warmupTargetReps?: Array<number | undefined>;
   warmupRestSeconds?: Array<number | undefined>;
@@ -180,6 +182,8 @@ type WorkoutSet = {
   targetRepsMax?: number;
   rir?: number;
   targetRir?: number;
+  targetToFailure?: boolean;
+  wentToFailure?: boolean;
   isCompleted: boolean;
   previousWeight?: number;
   previousReps?: number;
