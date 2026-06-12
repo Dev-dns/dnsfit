@@ -9,6 +9,8 @@
 ## Execution & Validation (Highest Priority)
 1. **[2026-06-08] Empty repo has no verified commands**
    Do instead: inspect newly added manifests/config before running setup, build, lint, typecheck, or test commands.
+2. **[2026-06-12] Dexie store additions need real migrations**
+   Do instead: add a new `db.version(n)` migration when stores change, and repair missing stores for early local databases instead of editing old version declarations only.
 
 ## Shell & Command Reliability
 
