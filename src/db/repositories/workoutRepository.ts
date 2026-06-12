@@ -5,6 +5,12 @@ import { calculateBackOffWeight } from "../../domain/workouts/backOff";
 import { calculateWarmupWeight } from "../../domain/workouts/warmups";
 import { calculateKgVolume, isEffectiveSet } from "../../domain/volume/volumeCalculations";
 import { db } from "../db";
+import { repairMissingObjectStores } from "../idbRepair";
+
+const isMissingObjectStoreError = (error: unknown) => {
+  if (!(error instanceof Error)) return false;
+  return error.name === "NotFoundError" || error.message.includes("objectStore") || error.message.includes("object store");
+};
 
 const getBestCompletedWeightByExercise = async (exerciseIds: string[]) => {
   const completedWorkoutIds = new Set((await db.workouts.where("status").equals("completed").toArray()).map((workout) => workout.id));
@@ -102,6 +108,7 @@ export const workoutRepository = {
     return { workout, workoutExercises, sets, exercises, routineExercises, restTimer, bestWeightsByExercise };
   },
   startFromRoutineDay: async (routineDayId: string) => {
+    const createWorkoutFromRoutineDay = async () => {
     const active = await db.workouts.where("status").equals("active").first();
     if (active) return active.id;
 
@@ -183,6 +190,17 @@ export const workoutRepository = {
     });
 
     return workoutId;
+    };
+
+    try {
+      return await createWorkoutFromRoutineDay();
+    } catch (error) {
+      if (!isMissingObjectStoreError(error)) throw error;
+      db.close();
+      await repairMissingObjectStores();
+      await db.open();
+      return createWorkoutFromRoutineDay();
+    }
   },
   updateSet: async (setId: string, patch: Partial<WorkoutSet>) => {
     const current = await db.workoutSets.get(setId);
