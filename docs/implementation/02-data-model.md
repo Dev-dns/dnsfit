@@ -282,7 +282,7 @@ db.version(1).stores({
 });
 ```
 
-- Dexie v3 repairs early local databases that were created before every MVP object store existed by creating any missing stores during upgrade.
+- Dexie v4 plus a native pre-open repair handle early local databases that were created before every MVP object store existed by creating any missing stores during upgrade.
 - Add compound indexes only when a query actually needs them.
 
 ## Backup Format

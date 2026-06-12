@@ -7,7 +7,7 @@ Validation:
 - `npm run typecheck` passed.
 - `npm run build` passed.
 - Browser smoke test loaded the app after Dexie v2 migration and rendered the Rutinas screen.
-- 2026-06-12 hotfix added Dexie v3 repair for early local databases missing workout object stores.
+- 2026-06-12 hotfix added Dexie v4/native repair for early local databases missing workout object stores.
 
 Notes:
 - Previous references are captured when a workout is started, using completed workout history.
